@@ -24,7 +24,19 @@ CREATE TABLE IF NOT EXISTS contestants (
   -- true once a contestant is voted out of the show. They stay out of the
   -- draft pool (see the dashboard loader's contestant query) but are never
   -- removed from any team_members row that already picked them.
-  eliminated BOOLEAN NOT NULL DEFAULT false
+  eliminated BOOLEAN NOT NULL DEFAULT false,
+  -- The week number this contestant most recently won individual immunity.
+  -- NULL until they've won it at least once.
+  immunity_win_week INTEGER,
+  -- The week number this contestant was voted out. Only ever set once
+  -- `eliminated` is true; NULL otherwise.
+  week_eliminated INTEGER,
+  -- true for the single contestant who actually wins the season. Distinct
+  -- from team_members.is_ultimate_survivor, which is each fantasy team's
+  -- *prediction* of who that will be.
+  is_ultimate_survivor BOOLEAN NOT NULL DEFAULT false,
+  -- Which in-show tribe/team this contestant currently belongs to.
+  in_show_team TEXT
 );
 
 
