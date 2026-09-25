@@ -3,11 +3,11 @@
 import { type RouteConfig, index, route } from "@react-router/dev/routes";
 
 export default [
-  // "/" itself isn't a real page — home.tsx just redirects to /login.
-  // (Login used to live directly on "/" as an index route, but index routes
-  // share their URL with this parent, which forces React Router to add a
-  // `?index` query param to disambiguate form submissions. Giving login its
-  // own real path avoids that entirely.)
+  // "/" is the public leaderboard (home.tsx), not the login page. Login used
+  // to live directly on "/" as an index route, but index routes share their
+  // URL with this parent, which forces React Router to add a `?index` query
+  // param to disambiguate form submissions — giving login its own real path
+  // avoids that entirely.
   index("routes/home.tsx"),
   route("login", "routes/login.tsx"),
   route("signup", "routes/signup.tsx"),

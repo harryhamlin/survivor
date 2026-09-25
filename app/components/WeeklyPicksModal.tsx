@@ -1,22 +1,24 @@
-// A prominent button + modal for the week's two predictions: who gets voted
-// out, and who wins immunity. Submits to the dashboard route's action (see
-// the `intent` field) rather than having a page of its own.
+// The week's two predictions: who gets voted out, and who wins immunity.
+// Mirrors TeamSection's pattern — a prominent button before any picks exist,
+// a standalone read-only box with an "edit weekly picks" link once they do —
+// with the actual form living in a modal either way. Submits to the
+// dashboard route's action (see the `intent` field) rather than having a
+// page of its own.
 import { useState } from "react";
 import { Form } from "react-router";
 
 export function WeeklyPicksModal({
   contestants,
   currentPicks,
-  isLocked,
-  deadlineLabel,
-  reopenDayLabel,
   error,
 }: {
   contestants: { id: number; contestant_name: string }[];
-  currentPicks: { eliminatedId: number; immunityWinnerId: number } | null;
-  isLocked: boolean;
-  deadlineLabel: string;
-  reopenDayLabel: string | null;
+  currentPicks: {
+    eliminatedId: number;
+    eliminatedName: string;
+    immunityWinnerId: number;
+    immunityWinnerName: string;
+  } | null;
   error?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -33,27 +35,37 @@ export function WeeklyPicksModal({
   const canSubmit =
     eliminatedId !== "" && immunityWinnerId !== "" && !sameContestantTwice;
 
-  if (isLocked) {
-    return (
-      <p className="border border-primary/40 px-4 py-4 text-center text-primary/70">
-        This week&apos;s picks locked at {deadlineLabel}. They reopen{" "}
-        {reopenDayLabel}.
-      </p>
-    );
-  }
-
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="w-full bg-primary px-4 py-4 text-lg font-semibold text-black hover:opacity-90"
-      >
-        make my weekly picks
-      </button>
-      <p className="text-center text-sm text-primary/70">
-        Picks lock every week on {deadlineLabel}
-      </p>
+    <div className="space-y-4">
+      {!open &&
+        (currentPicks ? (
+          <div className="space-y-2">
+            <p className="text-sm text-primary/70">your weekly picks</p>
+            <div className="space-y-1 border border-primary/40 p-4">
+              <p className="text-primary">
+                voted out: {currentPicks.eliminatedName}
+              </p>
+              <p className="text-primary">
+                immunity: {currentPicks.immunityWinnerName}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="text-sm text-primary/70 hover:underline"
+            >
+              edit weekly picks
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="w-full bg-primary px-4 py-4 text-lg font-semibold text-black hover:opacity-90"
+          >
+            make my weekly picks
+          </button>
+        ))}
 
       {open && (
         // Clicking the dimmed backdrop closes the modal; clicking inside the
@@ -162,6 +174,6 @@ export function WeeklyPicksModal({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

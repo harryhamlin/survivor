@@ -8,10 +8,8 @@ import { requireUserId } from "../session.server";
 import { TEAM_SIZE } from "../constants";
 import {
   isTeamLocked,
-  isWeeklyPicksLocked,
   TEAM_LOCK_DEADLINE_LABEL,
   getWeeklyPicksDeadlineLabel,
-  getWeeklyPicksReopenDayLabel,
 } from "../deadlines.server";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { TeamSection } from "../components/TeamSection";
@@ -32,18 +30,19 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Bounces to /login if there's no active session.
   const userId = await requireUserId(request);
 
-  const result = await pool.query(
-    "SELECT username, created_at FROM users WHERE id = $1",
-    [userId],
-  );
-  const user = result.rows[0] as { username: string; created_at: string };
+  const result = await pool.query("SELECT username FROM users WHERE id = $1", [
+    userId,
+  ]);
+  const user = result.rows[0] as { username: string };
 
   // The user's team, if they've already picked one (joins teams ->
   // team_members -> contestants to get the actual names, not just ids). The
   // contestant id is included so TeamSection can pre-fill an edit of this
-  // team, even for a contestant who has since been eliminated.
+  // team, and `eliminated` so the roster can flag a member who's since been
+  // voted out — both stay on the roster regardless (see the note on
+  // teamPickableContestants below).
   const teamResult = await pool.query(
-    `SELECT c.id, c.contestant_name, tm.is_ultimate_survivor
+    `SELECT c.id, c.contestant_name, tm.is_ultimate_survivor, c.eliminated
      FROM teams t
      JOIN team_members tm ON tm.team_id = t.id
      JOIN contestants c ON c.id = tm.contestant_id
@@ -55,6 +54,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     id: row.id as number,
     name: row.contestant_name as string,
     isUltimateSurvivor: row.is_ultimate_survivor as boolean,
+    eliminated: row.eliminated as boolean,
   }));
 
   // Contestants a team can be built from: anyone still in the game, plus —
@@ -88,23 +88,38 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   // This week's predictions, if the user has already made them (null until
   // their first submission, then always the latest pair — see the note on
-  // weekly_picks in schema.sql).
+  // weekly_picks in schema.sql). Names are joined in directly here (rather
+  // than looked up from activeContestants) so the display box is correct
+  // even if a picked contestant's eliminated status changes after the pick
+  // was made.
   const weeklyPicksResult = await pool.query(
-    `SELECT predicted_eliminated_id, predicted_immunity_winner_id
-     FROM weekly_picks WHERE user_id = $1`,
+    `SELECT
+       wp.predicted_eliminated_id,
+       ec.contestant_name AS eliminated_name,
+       wp.predicted_immunity_winner_id,
+       ic.contestant_name AS immunity_winner_name
+     FROM weekly_picks wp
+     JOIN contestants ec ON ec.id = wp.predicted_eliminated_id
+     JOIN contestants ic ON ic.id = wp.predicted_immunity_winner_id
+     WHERE wp.user_id = $1`,
     [userId],
   );
   const weeklyPicksRow = weeklyPicksResult.rows[0] as
-    | { predicted_eliminated_id: number; predicted_immunity_winner_id: number }
+    | {
+        predicted_eliminated_id: number;
+        eliminated_name: string;
+        predicted_immunity_winner_id: number;
+        immunity_winner_name: string;
+      }
     | undefined;
   const weeklyPicks = weeklyPicksRow
     ? {
         eliminatedId: weeklyPicksRow.predicted_eliminated_id,
+        eliminatedName: weeklyPicksRow.eliminated_name,
         immunityWinnerId: weeklyPicksRow.predicted_immunity_winner_id,
+        immunityWinnerName: weeklyPicksRow.immunity_winner_name,
       }
     : null;
-
-  const weeklyPicksLocked = isWeeklyPicksLocked();
 
   return {
     user,
@@ -114,11 +129,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     weeklyPicks,
     isTeamLocked: isTeamLocked(),
     teamLockDeadlineLabel: TEAM_LOCK_DEADLINE_LABEL,
-    isWeeklyPicksLocked: weeklyPicksLocked,
     weeklyPicksDeadlineLabel: getWeeklyPicksDeadlineLabel(),
-    weeklyPicksReopenDayLabel: weeklyPicksLocked
-      ? getWeeklyPicksReopenDayLabel()
-      : null,
   };
 }
 
@@ -225,16 +236,11 @@ async function createOrUpdateTeamAction(userId: number, formData: FormData) {
 // Saves (or updates) the user's prediction for who gets voted out and who
 // wins immunity this week. Upserted rather than inserted — see the note on
 // weekly_picks in schema.sql for why there's only ever one row per user.
-// Blocked server-side once this week's picks have locked, same reasoning as
-// the team lock above.
+// Unlike the team draft, there's no deadline enforcement here: next week's
+// picks become available at the same moment this week's are due, so the
+// form is always open (see the comment on WEEKLY_LOCK_DAY in
+// deadlines.server.ts).
 async function weeklyPicksAction(userId: number, formData: FormData) {
-  if (isWeeklyPicksLocked()) {
-    return {
-      intent: "weekly-picks" as const,
-      error: "This week's picks are locked",
-    };
-  }
-
   const eliminatedId = Number(formData.get("eliminatedId"));
   const immunityWinnerId = Number(formData.get("immunityWinnerId"));
 
@@ -270,7 +276,8 @@ async function weeklyPicksAction(userId: number, formData: FormData) {
 }
 
 // Purely presentational: hands each section the data and lock state it
-// needs.
+// needs. The deadline/lock explanations for both sections are rendered once,
+// together, at the bottom of the page rather than inline in each section.
 export default function Dashboard({
   loaderData,
   actionData,
@@ -283,10 +290,9 @@ export default function Dashboard({
     weeklyPicks,
     isTeamLocked: teamLocked,
     teamLockDeadlineLabel,
-    isWeeklyPicksLocked: weeklyPicksLocked,
     weeklyPicksDeadlineLabel,
-    weeklyPicksReopenDayLabel,
   } = loaderData;
+  const hasTeam = team.length > 0;
 
   return (
     <main className="min-h-screen bg-background px-4 py-16">
@@ -296,9 +302,6 @@ export default function Dashboard({
           key={JSON.stringify(weeklyPicks)}
           contestants={activeContestants}
           currentPicks={weeklyPicks}
-          isLocked={weeklyPicksLocked}
-          deadlineLabel={weeklyPicksDeadlineLabel}
-          reopenDayLabel={weeklyPicksReopenDayLabel}
           error={
             actionData?.intent === "weekly-picks"
               ? actionData.error
@@ -307,15 +310,26 @@ export default function Dashboard({
         />
         <TeamSection
           key={JSON.stringify(team)}
-          createdAt={user.created_at}
           team={team}
           contestants={teamPickableContestants}
           isLocked={teamLocked}
-          lockDeadlineLabel={teamLockDeadlineLabel}
           error={
             actionData?.intent === "create-team" ? actionData.error : undefined
           }
         />
+        <div className="space-y-1 text-center text-sm text-primary/70">
+          <p>
+            These picks are due {weeklyPicksDeadlineLabel} — next week&apos;s
+            picks open right after.
+          </p>
+          <p>
+            {teamLocked
+              ? hasTeam
+                ? `Your team locked ${teamLockDeadlineLabel} and can no longer be changed.`
+                : `Team selection closed ${teamLockDeadlineLabel} — you didn't pick a team in time.`
+              : `You can change your team until ${teamLockDeadlineLabel}, after which it locks forever.`}
+          </p>
+        </div>
         <ScoringMetricsModal />
       </div>
     </main>

@@ -8,15 +8,12 @@ function pacificNow(): Date {
   );
 }
 
-// One-time, permanent deadline for the initial 3-person team draft. This is
-// a fixed literal — NOT "the next 8pm Pacific from whenever this code
-// happens to run" — because a deadline recomputed relative to "now" on every
-// request would just keep sliding forward and could never actually become
-// permanently in the past. Computed once as the next 8pm Pacific from the
-// moment this was written (Friday 2026-09-25, ~1:54 PM Pacific), i.e.
-// 8:00 PM PDT that same day. Edit this literal directly if the real
-// deadline turns out to be different.
-export const TEAM_LOCK_DEADLINE = new Date("2026-09-26T03:00:00.000Z");
+// One-time, permanent deadline for the initial 3-person team draft: 8:00 PM
+// Pacific on September 30, 2026 (still PDT — DST doesn't end until
+// November). This is a fixed literal, not computed relative to "now" on
+// every request — a moving target could never actually become permanently
+// in the past. Edit this literal directly if the real deadline changes.
+export const TEAM_LOCK_DEADLINE = new Date("2026-10-01T03:00:00.000Z");
 
 export function isTeamLocked(): boolean {
   return Date.now() >= TEAM_LOCK_DEADLINE.getTime();
@@ -37,18 +34,17 @@ export const TEAM_LOCK_DEADLINE_LABEL = TEAM_LOCK_DEADLINE.toLocaleString(
   },
 );
 
-// The weekly elimination/immunity picks lock every WEEKLY_LOCK_DAY at
-// WEEKLY_LOCK_HOUR:00 Pacific, then re-open automatically once that day has
-// passed. Defaults to Wednesday, matching Survivor's usual US broadcast
-// night — this is an assumption, not something the user specified; change
-// WEEKLY_LOCK_DAY if the real air day differs.
+// The weekly elimination/immunity picks are due every WEEKLY_LOCK_DAY at
+// WEEKLY_LOCK_HOUR:00 Pacific — but unlike the team draft, there's no actual
+// locked gap: next week's picks become available at that exact same moment
+// (overwriting this week's row — see weekly_picks in schema.sql), so the
+// form is always open. This deadline is purely informational, telling the
+// user which week's episode their current picks apply to. Defaults to
+// Wednesday, matching Survivor's usual US broadcast night — this is an
+// assumption, not something the user specified; change WEEKLY_LOCK_DAY if
+// the real air day differs.
 const WEEKLY_LOCK_DAY = 3; // getDay(): 0 = Sunday, 3 = Wednesday
 const WEEKLY_LOCK_HOUR = 20; // 8 PM, 24-hour clock
-
-export function isWeeklyPicksLocked(): boolean {
-  const now = pacificNow();
-  return now.getDay() === WEEKLY_LOCK_DAY && now.getHours() >= WEEKLY_LOCK_HOUR;
-}
 
 const WEEKDAY_NAMES = [
   "Sunday",
@@ -89,13 +85,4 @@ function getWeeklyPicksDeadline(): Date {
 
 export function getWeeklyPicksDeadlineLabel(): string {
   return formatPacificDayTime(getWeeklyPicksDeadline());
-}
-
-// Only meaningful while actually locked: picks re-open at midnight Pacific,
-// right after the lock day ends (see isWeeklyPicksLocked's window above).
-export function getWeeklyPicksReopenDayLabel(): string {
-  const now = pacificNow();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-  return WEEKDAY_NAMES[tomorrow.getDay()];
 }
