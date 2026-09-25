@@ -1,3 +1,6 @@
+// The root layout for every route in the app (React Router "framework mode"
+// root route). It owns the outer <html>/<head>/<body> shell, so every page
+// gets this document structure without repeating it per route.
 import {
   isRouteErrorResponse,
   Links,
@@ -10,10 +13,14 @@ import {
 import type { Route } from "./+types/root";
 import "./app.css";
 
+// <link> tags injected into <head> on every page. Currently just the
+// favicon; React Router merges this with any route-specific `links` export.
 export const links: Route.LinksFunction = () => [
   { rel: "icon", type: "image/png", href: "/favicon.png" },
 ];
 
+// The actual HTML document shell. `children` is wherever the router decides
+// to render the matched route tree (via the default export below).
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -32,10 +39,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+// The root route's own component — just renders whichever child route
+// matched the current URL.
 export default function App() {
   return <Outlet />;
 }
 
+// Catches any error thrown by a loader/action/render anywhere in the route
+// tree (including a thrown Response like a 404) and shows a fallback page
+// instead of a blank screen. Stack traces are only shown in dev.
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   let message = "Oops!";
   let details = "An unexpected error occurred.";

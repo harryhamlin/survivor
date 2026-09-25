@@ -1,3 +1,6 @@
+// Shown on the dashboard once the logged-in user has already picked a team:
+// their join date and their chosen contestants. Purely presentational — all
+// the data comes from the dashboard route's loader.
 export function TeamRoster({
   createdAt,
   team,

@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Custom display font used for the "Fantasy Survivor 51" title only (applied
+   via the `font-heading` theme token below). The .ttf lives in public/fonts
+   so it's served as a static asset; see public/fonts/SonOfAGlitch-LICENSE.txt
+   for licensing (free for personal, non-commercial use). */
 @font-face {
   font-family: "Son Of A Glitch";
   src: url("/fonts/SonOfAGlitch-pK7d.ttf") format("truetype");
@@ -8,6 +12,11 @@
   font-display: swap;
 }
 
+/* Tailwind v4 theme tokens. Defining `--color-*` here auto-generates
+   matching utility classes (bg-background, text-primary, border-primary,
+   etc.) that are used throughout the components instead of hardcoded
+   Tailwind palette colors, so the black/green look stays consistent and
+   easy to change from one place. */
 @theme {
   --font-sans: "Menlo", "Monaco", ui-monospace, monospace;
   --font-heading: "Son Of A Glitch", cursive;
@@ -15,6 +24,9 @@
   --color-primary: #00ff00;
 }
 
+/* Base page look: black background, green text everywhere by default.
+   `color-scheme: dark` tells the browser to use dark-mode UI chrome (e.g.
+   form control styling, scrollbars) to match. */
 html,
 body {
   background-color: var(--color-background);
