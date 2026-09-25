@@ -29,7 +29,7 @@ export function ScoringMetricsModal() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="scoring-metrics-title"
-            className="w-full max-w-sm space-y-4 rounded-xl border border-primary/40 bg-background p-6"
+            className="w-full max-w-sm space-y-4 border border-primary/40 bg-background p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between">

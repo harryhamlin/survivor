@@ -28,7 +28,7 @@ export function SignupForm({ error }: { error?: string }) {
                 type="text"
                 autoComplete="name"
                 required
-                className="w-full rounded-lg border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <div className="space-y-1">
@@ -44,7 +44,7 @@ export function SignupForm({ error }: { error?: string }) {
                 type="email"
                 autoComplete="email"
                 required
-                className="w-full rounded-lg border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <div className="space-y-1">
@@ -60,7 +60,7 @@ export function SignupForm({ error }: { error?: string }) {
                 type="text"
                 autoComplete="username"
                 required
-                className="w-full rounded-lg border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <div className="space-y-1">
@@ -77,7 +77,7 @@ export function SignupForm({ error }: { error?: string }) {
                 autoComplete="new-password"
                 required
                 minLength={8}
-                className="w-full rounded-lg border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             {/* Set by the route's action when signup fails (e.g. username or

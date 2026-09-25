@@ -6,16 +6,21 @@ export function TeamRoster({
   team,
 }: {
   createdAt: string;
-  team: string[];
+  team: { name: string; isUltimateSurvivor: boolean }[];
 }) {
   return (
     <>
-      <div className="rounded-xl border border-primary/40 p-4">
+      <div className="border border-primary/40 p-4">
         <p className="mb-2 text-sm text-primary/70">Your team</p>
         <ul className="space-y-1">
-          {team.map((name) => (
-            <li key={name} className="text-lg text-primary">
-              {name}
+          {team.map((member) => (
+            <li key={member.name} className="text-lg text-primary">
+              {member.name}
+              {member.isUltimateSurvivor && (
+                <span className="ml-2 text-sm text-primary/70">
+                  (ultimate survivor)
+                </span>
+              )}
             </li>
           ))}
         </ul>

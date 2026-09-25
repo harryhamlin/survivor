@@ -1,7 +1,8 @@
 // Shown on the dashboard when the logged-in user doesn't have a team yet.
-// Lets them check exactly TEAM_SIZE contestants and submit to create their
-// team (handled by the dashboard route's `action`).
-import { useState } from "react";
+// Lets them check exactly TEAM_SIZE contestants, designate one of them as
+// their "Ultimate Survivor" pick, and submit to create their team (handled
+// by the dashboard route's `action`).
+import { useEffect, useState } from "react";
 import { Form } from "react-router";
 import { TEAM_SIZE } from "../constants";
 
@@ -18,8 +19,20 @@ export function TeamPicker({
   // action — this is just so the user gets instant feedback instead of a
   // round trip.
   const [selected, setSelected] = useState<number[]>([]);
+  const [ultimateSurvivorId, setUltimateSurvivorId] = useState<number | null>(
+    null,
+  );
 
-  // Checks/unchecks a contestant, refusing to add a 6th once TEAM_SIZE are
+  // If a contestant gets unchecked after being picked as the Ultimate
+  // Survivor, that pick no longer makes sense — clear it so the form can't
+  // submit an ultimateSurvivorId that isn't one of the selected contestants.
+  useEffect(() => {
+    if (ultimateSurvivorId !== null && !selected.includes(ultimateSurvivorId)) {
+      setUltimateSurvivorId(null);
+    }
+  }, [selected, ultimateSurvivorId]);
+
+  // Checks/unchecks a contestant, refusing to add a 4th once TEAM_SIZE are
   // already selected.
   function toggle(id: number) {
     setSelected((prev) =>
@@ -30,6 +43,10 @@ export function TeamPicker({
           : prev,
     );
   }
+
+  const selectedContestants = contestants.filter((contestant) =>
+    selected.includes(contestant.id),
+  );
 
   return (
     <div className="space-y-4">
@@ -50,7 +67,7 @@ export function TeamPicker({
             return (
               <label
                 key={contestant.id}
-                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                className={`flex items-center gap-2 border px-3 py-2 text-sm ${
                   checked ? "border-primary bg-primary/10" : "border-primary/40"
                 } ${disabled ? "opacity-40" : "cursor-pointer"}`}
               >
@@ -73,12 +90,45 @@ export function TeamPicker({
             );
           })}
         </div>
+
+        {/* Only shows up once the roster is full — picking an Ultimate
+            Survivor from a still-changing list would be confusing. */}
+        {selected.length === TEAM_SIZE && (
+          <div className="space-y-2">
+            <p className="text-sm text-primary/70">
+              Who&apos;s your Ultimate Survivor?
+            </p>
+            <div className="space-y-2">
+              {selectedContestants.map((contestant) => (
+                <label
+                  key={contestant.id}
+                  className="flex cursor-pointer items-center gap-2 border border-primary/40 px-3 py-2 text-sm"
+                >
+                  {/* A radio group (not checkboxes) since exactly one
+                      contestant must be the Ultimate Survivor pick. */}
+                  <input
+                    type="radio"
+                    name="ultimateSurvivorId"
+                    value={contestant.id}
+                    checked={ultimateSurvivorId === contestant.id}
+                    onChange={() => setUltimateSurvivorId(contestant.id)}
+                    className="accent-primary"
+                  />
+                  <span className="text-primary">
+                    {contestant.contestant_name}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Set by the dashboard action if the save failed server-side
             (e.g. a race where a team already exists). */}
         {error && <p className="text-sm text-red-500">{error}</p>}
         <button
           type="submit"
-          disabled={selected.length !== TEAM_SIZE}
+          disabled={selected.length !== TEAM_SIZE || ultimateSurvivorId === null}
           className="w-full rounded-lg bg-primary px-3 py-2 font-medium text-black hover:opacity-90 disabled:opacity-40"
         >
           Save team

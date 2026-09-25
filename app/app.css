@@ -33,3 +33,20 @@ body {
   color: var(--color-primary);
   color-scheme: dark;
 }
+
+/* Purely visual: lowercases every glyph rendered on the page. It doesn't
+   change any underlying value — a username typed as "Test" still submits
+   and stores as "Test", it just always displays lowercase. Form controls
+   are listed explicitly because Tailwind's preflight resets their
+   text-transform to `none` directly on the element (to normalize native
+   control fonts across browsers), which otherwise overrides the inherited
+   value from html/body — inheritance only applies when nothing more
+   specific already set the property. */
+html,
+body,
+button,
+input,
+select,
+textarea {
+  text-transform: lowercase;
+}

@@ -24,11 +24,30 @@ const pool = new pg.Pool({
   ssl: isLocal ? undefined : { rejectUnauthorized: false },
 });
 
+// The tables schema.sql defines. Checked against pg_tables *before* running
+// the schema, since CREATE TABLE IF NOT EXISTS silently does nothing when a
+// table is already there — this is the only way to tell, per table, whether
+// this run actually built it or found it already in place.
+const TABLES = ["users", "contestants", "teams", "team_members"];
+
+const { rows: existingTables } = await pool.query(
+  `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = ANY($1)`,
+  [TABLES],
+);
+const alreadyExisted = new Set(existingTables.map((row) => row.tablename));
+
 // `pg` sends a plain string like this over the simple query protocol, which
 // (unlike the extended/prepared-statement protocol) supports a whole file's
 // worth of semicolon-separated statements — including the DO $$ ... $$
 // block — in a single call.
 await pool.query(schema);
-console.log("Schema applied");
+
+for (const table of TABLES) {
+  console.log(
+    alreadyExisted.has(table)
+      ? `${table} table already exists`
+      : `${table} table built`,
+  );
+}
 
 await pool.end();

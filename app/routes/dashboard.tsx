@@ -34,15 +34,18 @@ export async function loader({ request }: Route.LoaderArgs) {
   // The user's team, if they've already picked one (joins teams ->
   // team_members -> contestants to get the actual names, not just ids).
   const teamResult = await pool.query(
-    `SELECT c.contestant_name
+    `SELECT c.contestant_name, tm.is_ultimate_survivor
      FROM teams t
      JOIN team_members tm ON tm.team_id = t.id
      JOIN contestants c ON c.id = tm.contestant_id
      WHERE t.user_id = $1
-     ORDER BY c.contestant_name`,
+     ORDER BY tm.is_ultimate_survivor DESC, c.contestant_name`,
     [userId],
   );
-  const team = teamResult.rows.map((row) => row.contestant_name as string);
+  const team = teamResult.rows.map((row) => ({
+    name: row.contestant_name as string,
+    isUltimateSurvivor: row.is_ultimate_survivor as boolean,
+  }));
 
   // The full contestant pool, used to render the picker when the user has
   // no team yet. Harmless to fetch even when it won't be used — it's a
@@ -59,7 +62,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 // Handles the team-picker form submission (POST /dashboard). Creates the
-// user's team and its 5 members in a single transaction, so a failure partway
+// user's team and its TEAM_SIZE members — one of them flagged as the
+// "Ultimate Survivor" pick — in a single transaction, so a failure partway
 // through (e.g. a duplicate team) can't leave a half-saved team behind.
 export async function action({ request }: Route.ActionArgs) {
   const userId = await requireUserId(request);
@@ -69,15 +73,21 @@ export async function action({ request }: Route.ActionArgs) {
   const contestantIds = [
     ...new Set(formData.getAll("contestantId").map(Number)),
   ];
+  const ultimateSurvivorId = Number(formData.get("ultimateSurvivorId"));
 
-  // The 5-contestant rule lives here in application code rather than as a
-  // database constraint, so this is the one place that needs to change if
-  // the rule ever does.
+  // The team-size rule and "the Ultimate Survivor pick must be one of the
+  // selected contestants" rule both live here in application code rather
+  // than as database constraints, so this is the one place that needs to
+  // change if either rule does.
   if (
     contestantIds.length !== TEAM_SIZE ||
-    contestantIds.some((id) => !Number.isInteger(id))
+    contestantIds.some((id) => !Number.isInteger(id)) ||
+    !Number.isInteger(ultimateSurvivorId) ||
+    !contestantIds.includes(ultimateSurvivorId)
   ) {
-    return { error: `Select exactly ${TEAM_SIZE} contestants` };
+    return {
+      error: `Select ${TEAM_SIZE} contestants and choose your Ultimate Survivor`,
+    };
   }
 
   // A dedicated client (rather than pool.query) is needed here because a
@@ -93,8 +103,9 @@ export async function action({ request }: Route.ActionArgs) {
     );
     for (const contestantId of contestantIds) {
       await client.query(
-        "INSERT INTO team_members (team_id, contestant_id) VALUES ($1, $2)",
-        [team.id, contestantId],
+        `INSERT INTO team_members (team_id, contestant_id, is_ultimate_survivor)
+         VALUES ($1, $2, $3)`,
+        [team.id, contestantId, contestantId === ultimateSurvivorId],
       );
     }
     await client.query("COMMIT");

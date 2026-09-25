@@ -3,4 +3,4 @@
 // read the same value instead of two numbers drifting out of sync.
 
 // Number of contestants a user must pick to form a valid team.
-export const TEAM_SIZE = 5;
+export const TEAM_SIZE = 3;

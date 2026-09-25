@@ -88,11 +88,26 @@ ALTER TABLE teams ADD COLUMN IF NOT EXISTS cumulative_score INTEGER NOT NULL DEF
 -- Join table linking a team to the contestants drafted onto it. The
 -- composite primary key means a given contestant can only appear once per
 -- team (inserting the same pair twice fails), but there's deliberately no
--- database-level cap on how many rows a team can have — the "exactly 5
--- members" rule is enforced in application code (see app/constants.ts and
--- the dashboard action), not here.
+-- database-level cap on how many rows a team can have — the "exactly
+-- TEAM_SIZE members" rule is enforced in application code (see
+-- app/constants.ts and the dashboard action), not here.
 CREATE TABLE IF NOT EXISTS team_members (
   team_id INTEGER NOT NULL REFERENCES teams(id),
   contestant_id INTEGER NOT NULL REFERENCES contestants(id),
+  -- Exactly one of a team's members is designated as its "Ultimate
+  -- Survivor" pick (presumably scored differently from the rest of the
+  -- roster). The unique index below is what actually enforces "at most one
+  -- per team" at the database level — a boolean column alone wouldn't stop
+  -- two rows in the same team both being marked true.
+  is_ultimate_survivor BOOLEAN NOT NULL DEFAULT false,
   PRIMARY KEY (team_id, contestant_id)
 );
+
+ALTER TABLE team_members ADD COLUMN IF NOT EXISTS is_ultimate_survivor BOOLEAN NOT NULL DEFAULT false;
+
+-- A partial unique index (rather than a plain UNIQUE constraint) only
+-- applies to rows where is_ultimate_survivor is true, so any number of
+-- `false` rows per team are still allowed — just never more than one `true`.
+CREATE UNIQUE INDEX IF NOT EXISTS team_members_one_ultimate_survivor
+  ON team_members (team_id)
+  WHERE is_ultimate_survivor;
