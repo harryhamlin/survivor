@@ -6,6 +6,7 @@
 // page of its own.
 import { useState } from "react";
 import { Form } from "react-router";
+import { IN_SHOW_TEAMS, type InShowTeam } from "../constants";
 
 export function WeeklyPicksModal({
   contestants,
@@ -16,8 +17,7 @@ export function WeeklyPicksModal({
   currentPicks: {
     eliminatedId: number;
     eliminatedName: string;
-    immunityWinnerId: number;
-    immunityWinnerName: string;
+    immunityWinnerTeam: string;
   } | null;
   error?: string;
 }) {
@@ -26,14 +26,11 @@ export function WeeklyPicksModal({
   const [eliminatedId, setEliminatedId] = useState<number | "">(
     currentPicks?.eliminatedId ?? "",
   );
-  const [immunityWinnerId, setImmunityWinnerId] = useState<number | "">(
-    currentPicks?.immunityWinnerId ?? "",
-  );
+  const [immunityWinnerTeam, setImmunityWinnerTeam] = useState<
+    InShowTeam | ""
+  >((currentPicks?.immunityWinnerTeam as InShowTeam) ?? "");
 
-  const sameContestantTwice =
-    eliminatedId !== "" && eliminatedId === immunityWinnerId;
-  const canSubmit =
-    eliminatedId !== "" && immunityWinnerId !== "" && !sameContestantTwice;
+  const canSubmit = eliminatedId !== "" && immunityWinnerTeam !== "";
 
   return (
     <div className="space-y-4">
@@ -45,8 +42,8 @@ export function WeeklyPicksModal({
               <p className="text-primary">
                 voted out: {currentPicks.eliminatedName}
               </p>
-              <p className="text-primary">
-                immunity: {currentPicks.immunityWinnerName}
+              <p className="text-primary capitalize">
+                immunity: {currentPicks.immunityWinnerTeam}
               </p>
             </div>
             <button
@@ -130,37 +127,32 @@ export function WeeklyPicksModal({
                 </select>
               </div>
               <div className="space-y-1">
-                <label
-                  htmlFor="immunityWinnerId"
-                  className="block text-sm text-primary/70"
-                >
-                  who will win immunity?
-                </label>
-                <select
-                  id="immunityWinnerId"
-                  name="immunityWinnerId"
-                  required
-                  value={immunityWinnerId}
-                  onChange={(event) =>
-                    setImmunityWinnerId(Number(event.target.value))
-                  }
-                  className="w-full border border-primary/40 bg-background px-3 py-2 text-primary"
-                >
-                  <option value="" disabled>
-                    select a contestant
-                  </option>
-                  {contestants.map((contestant) => (
-                    <option key={contestant.id} value={contestant.id}>
-                      {contestant.contestant_name}
-                    </option>
+                <span className="block text-sm text-primary/70">
+                  which team will win immunity?
+                </span>
+                <input
+                  type="hidden"
+                  name="immunityWinnerTeam"
+                  value={immunityWinnerTeam}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  {IN_SHOW_TEAMS.map((team) => (
+                    <button
+                      key={team}
+                      type="button"
+                      onClick={() => setImmunityWinnerTeam(team)}
+                      aria-pressed={immunityWinnerTeam === team}
+                      className={`border px-3 py-2 capitalize ${
+                        immunityWinnerTeam === team
+                          ? "border-primary bg-primary text-black"
+                          : "border-primary/40 text-primary hover:border-primary"
+                      }`}
+                    >
+                      {team}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
-              {sameContestantTwice && (
-                <p className="text-sm text-red-500">
-                  pick two different contestants
-                </p>
-              )}
               {/* Set by the dashboard action if the save failed server-side. */}
               {error && <p className="text-sm text-red-500">{error}</p>}
               <button
