@@ -8,9 +8,15 @@ import { TEAM_SIZE } from "../constants";
 
 export function TeamPicker({
   contestants,
+  initialSelectedIds = [],
+  initialUltimateSurvivorId = null,
   error,
 }: {
   contestants: { id: number; contestant_name: string }[];
+  // Pre-fills the form when editing an already-saved team, rather than
+  // starting from an empty selection.
+  initialSelectedIds?: number[];
+  initialUltimateSurvivorId?: number | null;
   error?: string;
 }) {
   // Client-side selection state, used only to drive the UI (disabling
@@ -18,9 +24,9 @@ export function TeamPicker({
   // The actual source of truth for validation is still the server-side
   // action — this is just so the user gets instant feedback instead of a
   // round trip.
-  const [selected, setSelected] = useState<number[]>([]);
+  const [selected, setSelected] = useState<number[]>(initialSelectedIds);
   const [ultimateSurvivorId, setUltimateSurvivorId] = useState<number | null>(
-    null,
+    initialUltimateSurvivorId,
   );
 
   // If a contestant gets unchecked after being picked as the Ultimate

@@ -11,7 +11,7 @@ export function TeamRoster({
   return (
     <>
       <div className="border border-primary/40 p-4">
-        <p className="mb-2 text-sm text-primary/70">Your team</p>
+        <p className="mb-2 text-sm text-primary/70">your final 3</p>
         <ul className="space-y-1">
           {team.map((member) => (
             <li key={member.name} className="text-lg text-primary">

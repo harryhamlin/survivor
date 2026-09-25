@@ -8,7 +8,7 @@ import { LoginForm } from "../components/LoginForm";
 
 // <title>/<meta> tags for this page.
 export function meta({}: Route.MetaArgs) {
-  return [{ title: "Sign In" }, { name: "description", content: "Sign in" }];
+  return [{ title: "sign in" }, { name: "description", content: "Sign in" }];
 }
 
 // Runs on POST (i.e. when the login form is submitted). Looks up the

@@ -7,7 +7,7 @@ import { createUserSession } from "../session.server";
 import { SignupForm } from "../components/SignupForm";
 
 export function meta({}: Route.MetaArgs) {
-  return [{ title: "Sign Up" }, { name: "description", content: "Sign up" }];
+  return [{ title: "sign up" }, { name: "description", content: "Sign up" }];
 }
 
 export async function action({ request }: Route.ActionArgs) {

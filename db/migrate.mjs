@@ -28,7 +28,13 @@ const pool = new pg.Pool({
 // the schema, since CREATE TABLE IF NOT EXISTS silently does nothing when a
 // table is already there — this is the only way to tell, per table, whether
 // this run actually built it or found it already in place.
-const TABLES = ["users", "contestants", "teams", "team_members"];
+const TABLES = [
+  "users",
+  "contestants",
+  "teams",
+  "team_members",
+  "weekly_picks",
+];
 
 const { rows: existingTables } = await pool.query(
   `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = ANY($1)`,

@@ -29,10 +29,15 @@ CREATE TABLE IF NOT EXISTS contestants (
   -- This week's score, overwritten each week rather than kept as history —
   -- see the note on `teams.cumulative_score` below for how the running
   -- total is tracked separately.
-  weekly_score INTEGER NOT NULL DEFAULT 0
+  weekly_score INTEGER NOT NULL DEFAULT 0,
+  -- true once a contestant is voted out of the show. They stay out of the
+  -- draft pool (see the dashboard loader's contestant query) but are never
+  -- removed from any team_members row that already picked them.
+  eliminated BOOLEAN NOT NULL DEFAULT false
 );
 
 ALTER TABLE contestants ADD COLUMN IF NOT EXISTS weekly_score INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE contestants ADD COLUMN IF NOT EXISTS eliminated BOOLEAN NOT NULL DEFAULT false;
 
 -- Seed the contestant pool, but only the first time this table is created —
 -- checking "is the table empty" (rather than unconditionally inserting) is
@@ -111,3 +116,18 @@ ALTER TABLE team_members ADD COLUMN IF NOT EXISTS is_ultimate_survivor BOOLEAN N
 CREATE UNIQUE INDEX IF NOT EXISTS team_members_one_ultimate_survivor
   ON team_members (team_id)
   WHERE is_ultimate_survivor;
+
+-- A user's predictions for the current week: who gets voted out, and who
+-- wins the immunity challenge. `user_id` is UNIQUE, so — like weekly_score —
+-- this holds only the current week's picks; submitting new ones overwrites
+-- the old pair rather than keeping a history.
+CREATE TABLE IF NOT EXISTS weekly_picks (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+  predicted_eliminated_id INTEGER NOT NULL REFERENCES contestants(id),
+  predicted_immunity_winner_id INTEGER NOT NULL REFERENCES contestants(id),
+  -- The same contestant can't be predicted to both lose (voted out) and win
+  -- (immunity) in the same week.
+  CHECK (predicted_eliminated_id <> predicted_immunity_winner_id),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
