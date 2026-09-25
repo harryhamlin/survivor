@@ -2,7 +2,11 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import pg from "pg";
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const isLocal = (process.env.DATABASE_URL ?? "").includes("localhost");
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: isLocal ? undefined : { rejectUnauthorized: false },
+});
 
 const users = [{ username: "test", password: "test" }];
 

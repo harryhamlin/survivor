@@ -38,14 +38,14 @@ export async function getUserId(request: Request) {
 export async function requireUserId(request: Request) {
   const userId = await getUserId(request);
   if (userId === null) {
-    throw redirect("/");
+    throw redirect("/login");
   }
   return userId;
 }
 
 export async function logout(request: Request) {
   const session = await getSession(request);
-  return redirect("/", {
+  return redirect("/login", {
     headers: { "Set-Cookie": await sessionStorage.destroySession(session) },
   });
 }
