@@ -7,7 +7,7 @@
 import { Link } from "react-router";
 import { TopBanner } from "./TopBanner";
 
-type Pick = { eliminatedName: string; immunityWinnerName: string } | null;
+type Pick = { eliminatedName: string; immunityWinnerTeam: string } | null;
 
 export function DetailedScores({
   username,
@@ -86,7 +86,7 @@ export function DetailedScores({
                           <>
                             out: {pick.eliminatedName}
                             <br />
-                            imm: {pick.immunityWinnerName}
+                            imm: <span className="capitalize">{pick.immunityWinnerTeam}</span>
                           </>
                         ) : (
                           "—"
