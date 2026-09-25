@@ -7,10 +7,7 @@
     "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
-    "db:seed": "node db/seed.mjs",
-    "dev": "vite",
-    "build": "vite build",
-    "start": "serve -s dist -l $PORT"
+    "db:seed": "node db/seed.mjs"
   },
   "dependencies": {
     "@react-router/node": "^8.4.0",
@@ -21,8 +18,7 @@
     "pg": "^8.23.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router": "^8.4.0",
-    "serve": "^14.2.6"
+    "react-router": "^8.4.0"
   },
   "devDependencies": {
     "@react-router/dev": "^8.4.0",
