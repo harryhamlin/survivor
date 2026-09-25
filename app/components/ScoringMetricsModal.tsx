@@ -48,8 +48,25 @@ export function ScoringMetricsModal() {
                 ✕
               </button>
             </div>
-            {/* Placeholder until real scoring rules are written. */}
-            <p className="text-primary/80">test rules</p>
+            <div className="space-y-3 text-primary/80">
+              <div>
+                <p className="font-medium text-primary">Final 3</p>
+                <p className="text-sm">
+                  Scored only once, at the end of the season — not week by
+                  week.
+                </p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+                  <li>
+                    +4 points for each of your team&apos;s picks who makes
+                    the final 3.
+                  </li>
+                  <li>
+                    +4 bonus points if your Ultimate Survivor pick wins the
+                    season.
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       )}
