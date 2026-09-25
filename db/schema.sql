@@ -13,15 +13,6 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- `ADD COLUMN IF NOT EXISTS` (rather than only listing the columns above) is
--- what actually applies this to a database that already has the `users`
--- table from before these columns existed — the CREATE TABLE above only ever
--- runs the very first time the table is created. Both are nullable at the
--- database level (the pre-existing `test` user has neither) — the sign-up
--- form is what actually requires them going forward.
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT UNIQUE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT;
-
 -- The pool of Survivor contestants that users can draft onto their team.
 CREATE TABLE IF NOT EXISTS contestants (
   id SERIAL PRIMARY KEY,
@@ -36,8 +27,6 @@ CREATE TABLE IF NOT EXISTS contestants (
   eliminated BOOLEAN NOT NULL DEFAULT false
 );
 
-ALTER TABLE contestants ADD COLUMN IF NOT EXISTS weekly_score INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE contestants ADD COLUMN IF NOT EXISTS eliminated BOOLEAN NOT NULL DEFAULT false;
 
 -- Seed the contestant pool, but only the first time this table is created —
 -- checking "is the table empty" (rather than unconditionally inserting) is
@@ -114,17 +103,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS team_members_one_ultimate_survivor
   ON team_members (team_id)
   WHERE is_ultimate_survivor;
 
--- A user's predictions for the current week: who gets voted out, and who
--- wins the immunity challenge. `user_id` is UNIQUE, so — like weekly_score —
--- this holds only the current week's picks; submitting new ones overwrites
--- the old pair rather than keeping a history.
+-- A user's predictions for a given week: who gets voted out, and who wins
+-- the immunity challenge. One row per (user, week) — see
+-- deadlines.server.ts's getCurrentWeekNumber for how "week" is computed —
+-- so history accumulates across the season (used by the /scores page)
+-- instead of being overwritten.
 CREATE TABLE IF NOT EXISTS weekly_picks (
   id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  week_number INTEGER NOT NULL,
   predicted_eliminated_id INTEGER NOT NULL REFERENCES contestants(id),
   predicted_immunity_winner_id INTEGER NOT NULL REFERENCES contestants(id),
   -- The same contestant can't be predicted to both lose (voted out) and win
   -- (immunity) in the same week.
   CHECK (predicted_eliminated_id <> predicted_immunity_winner_id),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, week_number)
 );

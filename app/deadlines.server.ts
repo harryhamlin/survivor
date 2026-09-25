@@ -86,3 +86,18 @@ function getWeeklyPicksDeadline(): Date {
 export function getWeeklyPicksDeadlineLabel(): string {
   return formatPacificDayTime(getWeeklyPicksDeadline());
 }
+
+const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+// Which week's picks are currently open — week 1's deadline is the same
+// Wednesday as the team draft lock (TEAM_LOCK_DEADLINE), and every
+// subsequent week is exactly 7 days later. This is plain millisecond
+// arithmetic against a real anchor instant, so it can drift by an hour
+// across a DST transition (Pacific clocks change twice a year) — acceptable
+// slop for a fantasy sports app, not worth a timezone library to avoid.
+export function getCurrentWeekNumber(): number {
+  const now = Date.now();
+  const firstDeadline = TEAM_LOCK_DEADLINE.getTime();
+  if (now < firstDeadline) return 1;
+  return Math.floor((now - firstDeadline) / MS_PER_WEEK) + 2;
+}

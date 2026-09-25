@@ -1,7 +1,7 @@
 // The "/dashboard" route: the main page a logged-in user sees. Shows either
 // a picker to build their team of contestants (if they haven't yet) or their
 // saved team roster, plus the weekly elimination/immunity picks.
-import { redirect } from "react-router";
+import { Link, redirect } from "react-router";
 import type { Route } from "./+types/dashboard";
 import pool from "../db.server";
 import { requireUserId } from "../session.server";
@@ -10,6 +10,7 @@ import {
   isTeamLocked,
   TEAM_LOCK_DEADLINE_LABEL,
   getWeeklyPicksDeadlineLabel,
+  getCurrentWeekNumber,
 } from "../deadlines.server";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { TeamSection } from "../components/TeamSection";
@@ -87,11 +88,11 @@ export async function loader({ request }: Route.LoaderArgs) {
   }[];
 
   // This week's predictions, if the user has already made them (null until
-  // their first submission, then always the latest pair — see the note on
-  // weekly_picks in schema.sql). Names are joined in directly here (rather
-  // than looked up from activeContestants) so the display box is correct
-  // even if a picked contestant's eliminated status changes after the pick
-  // was made.
+  // their first submission this week). Names are joined in directly here
+  // (rather than looked up from activeContestants) so the display box is
+  // correct even if a picked contestant's eliminated status changes after
+  // the pick was made.
+  const currentWeek = getCurrentWeekNumber();
   const weeklyPicksResult = await pool.query(
     `SELECT
        wp.predicted_eliminated_id,
@@ -101,8 +102,8 @@ export async function loader({ request }: Route.LoaderArgs) {
      FROM weekly_picks wp
      JOIN contestants ec ON ec.id = wp.predicted_eliminated_id
      JOIN contestants ic ON ic.id = wp.predicted_immunity_winner_id
-     WHERE wp.user_id = $1`,
-    [userId],
+     WHERE wp.user_id = $1 AND wp.week_number = $2`,
+    [userId, currentWeek],
   );
   const weeklyPicksRow = weeklyPicksResult.rows[0] as
     | {
@@ -234,12 +235,12 @@ async function createOrUpdateTeamAction(userId: number, formData: FormData) {
 }
 
 // Saves (or updates) the user's prediction for who gets voted out and who
-// wins immunity this week. Upserted rather than inserted — see the note on
-// weekly_picks in schema.sql for why there's only ever one row per user.
-// Unlike the team draft, there's no deadline enforcement here: next week's
-// picks become available at the same moment this week's are due, so the
-// form is always open (see the comment on WEEKLY_LOCK_DAY in
-// deadlines.server.ts).
+// wins immunity this week. Upserted on (user_id, week_number) — editing this
+// week's picks again overwrites them, but past weeks stay untouched, so
+// history builds up for the /scores page. Unlike the team draft, there's no
+// deadline enforcement here: next week's picks become available at the same
+// moment this week's are due, so the form is always open (see the comment on
+// WEEKLY_LOCK_DAY in deadlines.server.ts).
 async function weeklyPicksAction(userId: number, formData: FormData) {
   const eliminatedId = Number(formData.get("eliminatedId"));
   const immunityWinnerId = Number(formData.get("immunityWinnerId"));
@@ -257,13 +258,13 @@ async function weeklyPicksAction(userId: number, formData: FormData) {
 
   try {
     await pool.query(
-      `INSERT INTO weekly_picks (user_id, predicted_eliminated_id, predicted_immunity_winner_id)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (user_id) DO UPDATE SET
+      `INSERT INTO weekly_picks (user_id, week_number, predicted_eliminated_id, predicted_immunity_winner_id)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id, week_number) DO UPDATE SET
          predicted_eliminated_id = EXCLUDED.predicted_eliminated_id,
          predicted_immunity_winner_id = EXCLUDED.predicted_immunity_winner_id,
          updated_at = now()`,
-      [userId, eliminatedId, immunityWinnerId],
+      [userId, getCurrentWeekNumber(), eliminatedId, immunityWinnerId],
     );
   } catch {
     return {
@@ -329,6 +330,14 @@ export default function Dashboard({
                 : `Team selection closed ${teamLockDeadlineLabel} — you didn't pick a team in time.`
               : `You can change your team until ${teamLockDeadlineLabel}, after which it locks forever.`}
           </p>
+        </div>
+        <div className="text-center">
+          <Link
+            to="/scores"
+            className="text-sm text-primary/70 hover:underline"
+          >
+            detailed scores
+          </Link>
         </div>
         <ScoringMetricsModal />
       </div>
