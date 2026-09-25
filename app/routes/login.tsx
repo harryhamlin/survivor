@@ -14,7 +14,7 @@ export function meta({}: Route.MetaArgs) {
 // Runs on POST (i.e. when the login form is submitted). Looks up the
 // submitted username, compares the submitted password against the stored
 // bcrypt hash, and either returns an error (re-rendering the form with a
-// message) or starts a session and redirects to the dashboard.
+// message) or starts a session and redirects to the landing page.
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const username = String(formData.get("username") ?? "");
@@ -38,7 +38,7 @@ export async function action({ request }: Route.ActionArgs) {
     return { error: "Invalid username or password" };
   }
 
-  return createUserSession(user.id, "/dashboard");
+  return createUserSession(user.id, "/");
 }
 
 // The page itself is just the reusable LoginForm component, fed whatever

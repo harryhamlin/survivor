@@ -1,7 +1,7 @@
 // The "/dashboard" route: the main page a logged-in user sees. Shows either
 // a picker to build their team of contestants (if they haven't yet) or their
 // saved team roster, plus the weekly elimination/immunity picks.
-import { Link, redirect } from "react-router";
+import { redirect } from "react-router";
 import type { Route } from "./+types/dashboard";
 import pool from "../db.server";
 import { requireUserId } from "../session.server";
@@ -297,7 +297,7 @@ export default function Dashboard({
 
   return (
     <main className="min-h-screen bg-background">
-      <TopBanner username={user.username} />
+      <TopBanner username={user.username} page="dashboard" />
       <div className="mx-auto max-w-2xl space-y-8 px-4 py-12">
         <WeeklyPicksModal
           key={JSON.stringify(weeklyPicks)}
@@ -328,16 +328,8 @@ export default function Dashboard({
               ? hasTeam
                 ? `Your team locked ${teamLockDeadlineLabel} and can no longer be changed.`
                 : `Team selection closed ${teamLockDeadlineLabel} — you didn't pick a team in time.`
-              : `You can change your team until ${teamLockDeadlineLabel}, after which it locks forever.`}
+              : `You can change your final 3 until ${teamLockDeadlineLabel}, after which it locks for all eternity.`}
           </p>
-        </div>
-        <div className="text-center">
-          <Link
-            to="/scores"
-            className="text-sm text-primary/70 hover:underline"
-          >
-            detailed scores
-          </Link>
         </div>
         <ScoringMetricsModal />
       </div>

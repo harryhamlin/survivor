@@ -4,7 +4,6 @@
 // scrolls underneath it (`sticky left-0` on both the header and body cells,
 // with an explicit background so scrolled-past columns don't show through).
 // Pure markup — all the data comes from the scores route's loader.
-import { Link } from "react-router";
 import { TopBanner } from "./TopBanner";
 
 type Pick = { eliminatedName: string; immunityWinnerName: string } | null;
@@ -18,26 +17,20 @@ export function DetailedScores({
   weeks: number[];
   rows: {
     username: string;
+    displayName: string;
     cumulativeScore: number;
     team: string[];
+    ultimateSurvivor: string | null;
     picks: Pick[];
   }[];
 }) {
   return (
     <main className="min-h-screen bg-background">
-      <TopBanner username={username} />
+      <TopBanner username={username} page="scores" />
       <div className="mx-auto max-w-5xl space-y-8 px-4 py-12">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-primary">
-            detailed scores
-          </h1>
-          <Link
-            to="/dashboard"
-            className="text-sm text-primary/70 hover:underline"
-          >
-            back to dashboard
-          </Link>
-        </div>
+        <h1 className="text-2xl font-semibold text-primary">
+          detailed scores
+        </h1>
 
         {rows.length === 0 ? (
           <p className="text-primary/70">No players yet</p>
@@ -46,14 +39,17 @@ export function DetailedScores({
             <table className="border-collapse text-sm">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 min-w-[140px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
-                    username
-                  </th>
-                  <th className="min-w-[220px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
-                    team
+                  <th className="sticky left-0 z-10 min-w-[180px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
+                    player
                   </th>
                   <th className="min-w-[100px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
                     score
+                  </th>
+                  <th className="min-w-[220px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
+                    final 3
+                  </th>
+                  <th className="min-w-[160px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
+                    ultimate survivor
                   </th>
                   {weeks.map((week) => (
                     <th
@@ -69,13 +65,16 @@ export function DetailedScores({
                 {rows.map((row) => (
                   <tr key={row.username}>
                     <td className="sticky left-0 z-10 border-b border-r border-primary/40 bg-background px-3 py-2 text-primary">
-                      {row.username}
+                      {row.displayName}
+                    </td>
+                    <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">
+                      {row.cumulativeScore}
                     </td>
                     <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">
                       {row.team.length > 0 ? row.team.join(", ") : "—"}
                     </td>
                     <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">
-                      {row.cumulativeScore}
+                      {row.ultimateSurvivor ?? "—"}
                     </td>
                     {row.picks.map((pick, index) => (
                       <td

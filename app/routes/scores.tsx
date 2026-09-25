@@ -25,22 +25,25 @@ export async function loader({ request }: Route.LoaderArgs) {
   const username = userResult.rows[0].username as string;
 
   // One row per user, with their team's contestant names pre-aggregated
-  // into an array (ultimate survivor first) — a LEFT JOIN all the way
-  // through so a user with no team yet still gets a row (empty team array).
+  // into an array (ultimate survivor first) plus that pick called out on its
+  // own — a LEFT JOIN all the way through so a user with no team yet still
+  // gets a row (empty team array, null ultimate survivor).
   const usersResult = await pool.query(
     `SELECT
        u.username,
+       u.name,
        COALESCE(t.cumulative_score, 0) AS cumulative_score,
        COALESCE(
          array_agg(c.contestant_name ORDER BY tm.is_ultimate_survivor DESC, c.contestant_name)
            FILTER (WHERE c.contestant_name IS NOT NULL),
          ARRAY[]::text[]
-       ) AS team_names
+       ) AS team_names,
+       MAX(c.contestant_name) FILTER (WHERE tm.is_ultimate_survivor) AS ultimate_survivor_name
      FROM users u
      LEFT JOIN teams t ON t.user_id = u.id
      LEFT JOIN team_members tm ON tm.team_id = t.id
      LEFT JOIN contestants c ON c.id = tm.contestant_id
-     GROUP BY u.id, u.username, t.cumulative_score
+     GROUP BY u.id, u.username, u.name, t.cumulative_score
      ORDER BY cumulative_score DESC, u.username ASC`,
   );
 
@@ -80,10 +83,17 @@ export async function loader({ request }: Route.LoaderArgs) {
   const rows = usersResult.rows.map((row) => {
     const username = row.username as string;
     const picksByWeek = picksByUsername.get(username);
+    const name = row.name as string | null;
+    // Just the first name, so "Jane Doe" displays as "Jane (jdoe)" rather
+    // than the full name — falls back to the username alone for accounts
+    // with no name set (e.g. seeded before the signup form required one).
+    const firstName = name?.trim().split(/\s+/)[0];
     return {
       username,
+      displayName: firstName ? `${firstName} (${username})` : username,
       cumulativeScore: row.cumulative_score as number,
       team: row.team_names as string[],
+      ultimateSurvivor: row.ultimate_survivor_name as string | null,
       picks: weeks.map((week) => picksByWeek?.get(week) ?? null),
     };
   });
