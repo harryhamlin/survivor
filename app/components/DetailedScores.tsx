@@ -5,13 +5,16 @@
 // with an explicit background so scrolled-past columns don't show through).
 // Pure markup — all the data comes from the scores route's loader.
 import { Link } from "react-router";
+import { TopBanner } from "./TopBanner";
 
 type Pick = { eliminatedName: string; immunityWinnerName: string } | null;
 
 export function DetailedScores({
+  username,
   weeks,
   rows,
 }: {
+  username: string;
   weeks: number[];
   rows: {
     username: string;
@@ -21,8 +24,9 @@ export function DetailedScores({
   }[];
 }) {
   return (
-    <main className="min-h-screen bg-background px-4 py-16">
-      <div className="mx-auto max-w-5xl space-y-8">
+    <main className="min-h-screen bg-background">
+      <TopBanner username={username} />
+      <div className="mx-auto max-w-5xl space-y-8 px-4 py-12">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-primary">
             detailed scores

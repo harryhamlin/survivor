@@ -12,7 +12,7 @@ import {
   getWeeklyPicksDeadlineLabel,
   getCurrentWeekNumber,
 } from "../deadlines.server";
-import { DashboardHeader } from "../components/DashboardHeader";
+import { TopBanner } from "../components/TopBanner";
 import { TeamSection } from "../components/TeamSection";
 import { ScoringMetricsModal } from "../components/ScoringMetricsModal";
 import { WeeklyPicksModal } from "../components/WeeklyPicksModal";
@@ -296,9 +296,9 @@ export default function Dashboard({
   const hasTeam = team.length > 0;
 
   return (
-    <main className="min-h-screen bg-background px-4 py-16">
-      <div className="mx-auto max-w-2xl space-y-8">
-        <DashboardHeader username={user.username} />
+    <main className="min-h-screen bg-background">
+      <TopBanner username={user.username} />
+      <div className="mx-auto max-w-2xl space-y-8 px-4 py-12">
         <WeeklyPicksModal
           key={JSON.stringify(weeklyPicks)}
           contestants={activeContestants}
@@ -309,6 +309,10 @@ export default function Dashboard({
               : undefined
           }
         />
+        <p className="text-center text-sm text-primary/70">
+          weekly picks are due {weeklyPicksDeadlineLabel} — next week&apos;s
+          picks open right after.
+        </p>
         <TeamSection
           key={JSON.stringify(team)}
           team={team}
@@ -319,10 +323,6 @@ export default function Dashboard({
           }
         />
         <div className="space-y-1 text-center text-sm text-primary/70">
-          <p>
-            These picks are due {weeklyPicksDeadlineLabel} — next week&apos;s
-            picks open right after.
-          </p>
           <p>
             {teamLocked
               ? hasTeam

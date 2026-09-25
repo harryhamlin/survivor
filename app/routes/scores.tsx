@@ -15,9 +15,14 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  // No page content depends on which user this is — this just gates the
-  // page behind being logged in at all.
-  await requireUserId(request);
+  // Nothing else on the page depends on which user this is, beyond
+  // requiring someone to be logged in and greeting them in the top banner.
+  const userId = await requireUserId(request);
+  const userResult = await pool.query(
+    "SELECT username FROM users WHERE id = $1",
+    [userId],
+  );
+  const username = userResult.rows[0].username as string;
 
   // One row per user, with their team's contestant names pre-aggregated
   // into an array (ultimate survivor first) — a LEFT JOIN all the way
@@ -83,9 +88,15 @@ export async function loader({ request }: Route.LoaderArgs) {
     };
   });
 
-  return { weeks, rows };
+  return { username, weeks, rows };
 }
 
 export default function Scores({ loaderData }: Route.ComponentProps) {
-  return <DetailedScores weeks={loaderData.weeks} rows={loaderData.rows} />;
+  return (
+    <DetailedScores
+      username={loaderData.username}
+      weeks={loaderData.weeks}
+      rows={loaderData.rows}
+    />
+  );
 }
