@@ -6,7 +6,7 @@ export function DashboardHeader({ username }: { username: string }) {
   return (
     <div className="flex items-center justify-between">
       <h1 className="text-2xl font-semibold text-primary">
-        Welcome, {username}
+        {username}
       </h1>
       {/* Posting to /logout (a separate route) rather than handling this in
           the dashboard's own action keeps "log out" independent of whatever

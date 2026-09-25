@@ -10,6 +10,7 @@ export default [
   // own real path avoids that entirely.)
   index("routes/home.tsx"),
   route("login", "routes/login.tsx"),
+  route("signup", "routes/signup.tsx"),
   route("dashboard", "routes/dashboard.tsx"),
   route("logout", "routes/logout.tsx"),
 ] satisfies RouteConfig;

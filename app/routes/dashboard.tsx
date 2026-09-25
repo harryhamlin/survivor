@@ -9,6 +9,7 @@ import { TEAM_SIZE } from "../constants";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { TeamPicker } from "../components/TeamPicker";
 import { TeamRoster } from "../components/TeamRoster";
+import { ScoringMetricsModal } from "../components/ScoringMetricsModal";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -130,6 +131,7 @@ export default function Dashboard({
         ) : (
           <TeamRoster createdAt={user.created_at} team={team} />
         )}
+        <ScoringMetricsModal />
       </div>
     </main>
   );

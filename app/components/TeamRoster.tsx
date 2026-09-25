@@ -11,12 +11,6 @@ export function TeamRoster({
   return (
     <>
       <div className="rounded-xl border border-primary/40 p-4">
-        <p className="text-sm text-primary/70">Member since</p>
-        <p className="text-xl font-medium text-primary">
-          {new Date(createdAt).toLocaleDateString()}
-        </p>
-      </div>
-      <div className="rounded-xl border border-primary/40 p-4">
         <p className="mb-2 text-sm text-primary/70">Your team</p>
         <ul className="space-y-1">
           {team.map((name) => (

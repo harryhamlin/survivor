@@ -34,6 +34,9 @@ export function TeamPicker({
   return (
     <div className="space-y-4">
       <p className="text-sm text-primary/70">
+        Set your initial line-up for the season
+      </p>
+      <p className="text-sm text-primary/70">
         Pick {TEAM_SIZE} contestants ({selected.length}/{TEAM_SIZE} selected)
       </p>
       <Form method="post" className="space-y-6">
