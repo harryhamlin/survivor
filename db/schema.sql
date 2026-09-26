@@ -84,20 +84,28 @@ CREATE TABLE IF NOT EXISTS tribes (
 -- The pool of contestants for a season, draftable by fantasy players.
 -- `tribe_id` is nullable since a freshly-seeded contestant has no tribe
 -- assignment yet (see the note on the seed data below — tribes are assigned
--- by hand). `final_placement` is nullable until the contestant is out of the
--- game, at which point it's set to their finishing rank (1 = winner) — this
--- single column is what both marks a contestant as eliminated (non-null)
--- and drives "made the final N" scoring (final_placement <= finalist_count),
--- replacing the separate eliminated/week_eliminated/is_ultimate_survivor
--- booleans an earlier version of this schema had.
+-- by hand) — and it only ever reflects a contestant's *current* tribe.
+-- Historical, per-episode tribe membership (needed once tribes swap or
+-- shuffle) lives in contestant_episode_tribes instead; any scoring or
+-- display that cares what tribe someone was on *at a given past episode*
+-- must read that table, not this column.
+-- `final_placement` is the season-ending rank (1 = winner) used to award
+-- the final-3/winner bonus (final_placement <= finalist_count) — it's a
+-- separate concern from whether/when a contestant was voted out, which is
+-- recorded per episode in episode_eliminations. A null final_placement is
+-- not a stand-in for "still in the game": checking whether someone's been
+-- eliminated means checking episode_eliminations, not this column, since a
+-- contestant can be out of the game for many episodes before the season
+-- (and final_placement) is decided. Ties are allowed here (no
+-- UNIQUE(season_id, final_placement)) since a multi-boot episode can
+-- eliminate more than one contestant at the same placement.
 CREATE TABLE IF NOT EXISTS contestants (
   id SERIAL PRIMARY KEY,
   season_id INTEGER NOT NULL REFERENCES seasons(id),
   name TEXT NOT NULL,
   tribe_id INTEGER REFERENCES tribes(id),
   final_placement INTEGER,
-  UNIQUE (season_id, name),
-  UNIQUE (season_id, final_placement)
+  UNIQUE (season_id, name)
 );
 
 -- One row per episode of a season. `picks_lock_at` is a real stored instant
@@ -107,12 +115,15 @@ CREATE TABLE IF NOT EXISTS contestants (
 -- itself locks separately, at seasons.draft_lock_at — not necessarily tied
 -- to any one episode's picks_lock_at.) `status` tracks an episode through
 -- the pipeline the backend drives it through: airs, then its result gets
--- recorded and scored.
+-- recorded — this is a coarse, episode-level lifecycle marker, independent
+-- of episode_scoring's finer-grained, per-category pending/active/void
+-- status below.
 -- `immunity_type` is which kind of immunity this episode plays for —
 -- pre-merge episodes are usually tribe immunity, post-merge ones individual
 -- — and is what tells the backend whether to collect (and later grade) a
 -- weekly_picks.immunity_tribe_pick_id or an immunity_contestant_pick_id for
--- this episode.
+-- this episode, and which of episode_immunity_winners.tribe_id /
+-- contestant_id its winner rows should use.
 CREATE TABLE IF NOT EXISTS episodes (
   id SERIAL PRIMARY KEY,
   season_id INTEGER NOT NULL REFERENCES seasons(id),
@@ -124,6 +135,22 @@ CREATE TABLE IF NOT EXISTS episodes (
   immunity_type TEXT NOT NULL DEFAULT 'tribe'
     CHECK (immunity_type IN ('tribe', 'individual')),
   UNIQUE (season_id, episode_number)
+);
+
+-- A contestant's tribe at the immunity challenge in a given episode,
+-- recorded per episode rather than relied on solely from contestants.tribe_id
+-- (which only ever holds the *current* tribe) — so a tribe swap, shuffle, or
+-- merge doesn't retroactively change which tribe a past episode's immunity
+-- result (or a player's historical pick against it) is attributed to. Not
+-- seeded: contestants currently start with no tribe assigned at all (see
+-- the note on the seed data below), so there's no real historical
+-- membership yet to record — rows here only make sense once tribes are
+-- actually assigned by hand, episode by episode.
+CREATE TABLE IF NOT EXISTS contestant_episode_tribes (
+  episode_id INTEGER NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+  contestant_id INTEGER NOT NULL REFERENCES contestants(id),
+  tribe_id INTEGER NOT NULL REFERENCES tribes(id),
+  PRIMARY KEY (episode_id, contestant_id)
 );
 
 -- A fantasy player's draft for a season: which contestants they picked, and
@@ -153,15 +180,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS draft_picks_one_ultimate_pick
 -- and who (or which tribe) wins immunity. One row per (episode, player) —
 -- editing an episode's picks again overwrites them, but past episodes' rows
 -- stay untouched, so history accumulates for the /leaderboard page.
--- immunity_tribe_pick_id and immunity_contestant_pick_id are both nullable
--- because exactly one applies per row, depending on that episode's
--- immunity_type — the backend (the dashboard action) is what decides which
--- one to fill in, this table doesn't enforce the exclusivity itself.
+-- elimination_pick_id is nullable so a scheduled no-elimination episode can
+-- still accept a submission without forcing a meaningless elimination
+-- guess; immunity_tribe_pick_id and immunity_contestant_pick_id are both
+-- nullable because exactly one applies per row, depending on that episode's
+-- immunity_type. None of that — nor "a prediction is required whenever its
+-- category is actually open for picks" (see episode_scoring below) — is
+-- enforced here; the backend decides which column(s) a submission should
+-- fill in, and whether one is currently required, from episodes.immunity_type
+-- and episode_scoring.status.
 CREATE TABLE IF NOT EXISTS weekly_picks (
   id SERIAL PRIMARY KEY,
   episode_id INTEGER NOT NULL REFERENCES episodes(id),
   player_id INTEGER NOT NULL REFERENCES fantasy_players(id),
-  elimination_pick_id INTEGER NOT NULL REFERENCES contestants(id),
+  elimination_pick_id INTEGER REFERENCES contestants(id),
   immunity_tribe_pick_id INTEGER REFERENCES tribes(id),
   immunity_contestant_pick_id INTEGER REFERENCES contestants(id),
   submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -181,23 +213,105 @@ CREATE TABLE IF NOT EXISTS reminder_emails_sent (
   PRIMARY KEY (episode_id, reminder_type)
 );
 
--- The actual outcome of an episode, recorded once it airs. This is what
--- weekly_picks gets checked against and what marks a contestant eliminated
--- (a contestant is "out" once they appear as some episode's
--- eliminated_contestant_id). One row per episode (episode_id is the PK
--- directly, rather than a separate serial id, since the relationship is
--- inherently 1:1). All three outcome columns are nullable so a result can be
--- entered incrementally (e.g. the boot is known before immunity is
--- confirmed) — winning_tribe_id and immunity_contestant_id are also
--- mutually exclusive in practice, the same way their weekly_picks
--- counterparts are, per that episode's immunity_type. `finalized_at` being
--- set is what marks the row as official rather than a draft-in-progress.
+-- The parent row for an episode's actual outcome, recorded once it airs
+-- (episode_id is the PK directly, rather than a separate serial id, since
+-- the relationship to episodes is inherently 1:1). The outcome details
+-- themselves live in their own tables below — episode_eliminations (zero,
+-- one, or more boots) and episode_immunity_winners (one or more winning
+-- tribes or individuals) — both referencing this table's episode_id with
+-- ON DELETE CASCADE, so an episode's whole result can be entered or removed
+-- as a unit. `finalized_at` marks that the *actual show outcome* is
+-- complete and official, as opposed to a result still being entered —
+-- it's independent of whether that outcome is actually scored for fantasy
+-- points, which is governed per-category by episode_scoring.status below.
+-- A finalized episode_results row (with its eliminations/winners) should
+-- still exist even when a category ends up voided: the real outcome
+-- happened and is worth keeping on record regardless of scoring.
 CREATE TABLE IF NOT EXISTS episode_results (
   episode_id INTEGER PRIMARY KEY REFERENCES episodes(id),
-  eliminated_contestant_id INTEGER REFERENCES contestants(id),
-  winning_tribe_id INTEGER REFERENCES tribes(id),
-  immunity_contestant_id INTEGER REFERENCES contestants(id),
   finalized_at TIMESTAMPTZ
+);
+
+-- Zero, one, or more contestants eliminated in an episode — replaces a
+-- single eliminated_contestant_id column on episode_results, which could
+-- represent neither a no-elimination episode (without an unwanted dummy
+-- value) nor a double-boot episode (at all). A contestant counts as "out"
+-- once they appear here for any episode; app/backend logic that walks this
+-- table to derive elimination status doesn't need to change per row, just
+-- check existence the same way it checked the old column.
+CREATE TABLE IF NOT EXISTS episode_eliminations (
+  episode_id INTEGER NOT NULL REFERENCES episode_results(episode_id) ON DELETE CASCADE,
+  contestant_id INTEGER NOT NULL REFERENCES contestants(id),
+  PRIMARY KEY (episode_id, contestant_id)
+);
+
+-- One or more immunity winners for an episode — a tribe (or several) or an
+-- individual (or several), depending on that episode's immunity_type.
+-- Replaces the single winning_tribe_id/immunity_contestant_id columns
+-- previously on episode_results, which could only hold one winner of one
+-- kind. The CHECK below only enforces "exactly one of tribe_id/
+-- contestant_id is set" on each row; it can't verify that the one set
+-- matches the episode's immunity_type ('tribe' rows for a tribe-immunity
+-- episode, 'individual' for an individual one) or that the tribe/contestant
+-- referenced actually belongs to the same season as the episode — both are
+-- integrity rules whatever writes these rows has to enforce itself (a
+-- trigger, or application code), not something expressible as a plain
+-- CHECK/FK here.
+CREATE TABLE IF NOT EXISTS episode_immunity_winners (
+  id SERIAL PRIMARY KEY,
+  episode_id INTEGER NOT NULL REFERENCES episode_results(episode_id) ON DELETE CASCADE,
+  tribe_id INTEGER REFERENCES tribes(id),
+  contestant_id INTEGER REFERENCES contestants(id),
+  CHECK (
+    (tribe_id IS NOT NULL AND contestant_id IS NULL)
+    OR (tribe_id IS NULL AND contestant_id IS NOT NULL)
+  )
+);
+
+-- Two partial unique indexes (one per nullable winner column), rather than
+-- one UNIQUE(episode_id, tribe_id, contestant_id) — that composite wouldn't
+-- actually stop the same tribe (or contestant) being entered twice for the
+-- same episode, since Postgres treats two NULLs in a UNIQUE constraint as
+-- distinct rather than flagging the repeated non-null column as a conflict.
+CREATE UNIQUE INDEX IF NOT EXISTS episode_immunity_winners_unique_tribe
+  ON episode_immunity_winners (episode_id, tribe_id)
+  WHERE tribe_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS episode_immunity_winners_unique_contestant
+  ON episode_immunity_winners (episode_id, contestant_id)
+  WHERE contestant_id IS NOT NULL;
+
+-- Per-episode, per-category scoring control — every episode gets both an
+-- 'elimination' and an 'immunity' row (seeded automatically below, and for
+-- any episode added later), so the two can be independently graded or
+-- voided rather than an episode only having one all-or-nothing scoring
+-- state. This is a different axis entirely from episodes.status above:
+-- that's the episode's own aired/not-aired lifecycle, this is specifically
+-- about whether/how fantasy points get awarded.
+--   'pending' — not graded yet; no points awarded either way.
+--   'active'  — predictions are graded against the actual recorded outcome
+--               (episode_eliminations / episode_immunity_winners).
+--   'void'    — every player gets zero points for this category, no matter
+--               what the actual outcome or their prediction was. Voiding
+--               one category (say, a chaotic multi-boot elimination) never
+--               affects the other (immunity) for the same episode, since
+--               each category is its own row.
+-- The actual outcome is still recorded in episode_eliminations /
+-- episode_immunity_winners regardless of this status — void doesn't mean
+-- "don't record what happened," only "don't score it."
+CREATE TABLE IF NOT EXISTS episode_scoring (
+  episode_id INTEGER NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+  category TEXT NOT NULL CHECK (category IN ('elimination', 'immunity')),
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'active', 'void')),
+  void_reason TEXT,
+  -- Written to guard explicitly against a null void_reason: a naive
+  -- `status <> 'void' OR btrim(void_reason) <> ''` would let status='void'
+  -- through with a null void_reason, since a CHECK expression that
+  -- evaluates to null (as `btrim(NULL) <> ''` does) counts as satisfied,
+  -- not violated, in Postgres.
+  CHECK (status <> 'void' OR (void_reason IS NOT NULL AND btrim(void_reason) <> '')),
+  PRIMARY KEY (episode_id, category)
 );
 
 -- Seed a season, its two tribes, its contestant pool, and its first
@@ -205,7 +319,11 @@ CREATE TABLE IF NOT EXISTS episode_results (
 -- this table empty" rather than unconditionally inserting) so this file is
 -- safe to run more than once without duplicating rows or clobbering edits
 -- made by hand afterward (e.g. assigning contestants to tribes, or adding
--- later episodes) — see the note at the top of this file.
+-- later episodes) — see the note at the top of this file. Deliberately not
+-- seeded: contestant_episode_tribes (no real historical tribe memberships
+-- exist yet, since contestants start with no tribe assignment at all) and
+-- episode_eliminations/episode_immunity_winners/episode_results (no episode
+-- has actually aired yet in the seed data).
 DO $$
 DECLARE
   current_season_id INTEGER;
@@ -261,4 +379,15 @@ BEGIN
       '2026-10-01T03:00:00.000Z'
     );
   END IF;
+
+  -- Every episode needs both scoring-category rows to exist so grading or
+  -- voiding one is always an UPDATE, never a first-time INSERT. Unlike the
+  -- "is the table empty" guards above, this has to run every time this file
+  -- does — including against episodes added by hand well after the initial
+  -- seed — so it's keyed on ON CONFLICT DO NOTHING per (episode, category)
+  -- instead.
+  INSERT INTO episode_scoring (episode_id, category)
+  SELECT e.id, category
+  FROM episodes e, unnest(ARRAY['elimination', 'immunity']) AS category
+  ON CONFLICT (episode_id, category) DO NOTHING;
 END $$;
