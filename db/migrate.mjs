@@ -30,10 +30,14 @@ const pool = new pg.Pool({
 // this run actually built it or found it already in place.
 const TABLES = [
   "users",
+  "seasons",
+  "fantasy_players",
+  "tribes",
   "contestants",
-  "teams",
-  "team_members",
+  "episodes",
+  "draft_picks",
   "weekly_picks",
+  "episode_results",
 ];
 
 const { rows: existingTables } = await pool.query(

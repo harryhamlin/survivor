@@ -1,17 +1,18 @@
 // The "/dashboard" route: the main page a logged-in user sees. Shows either
-// a picker to build their team of contestants (if they haven't yet) or their
-// saved team roster, plus the weekly elimination/immunity picks.
+// a picker to build their draft (if they haven't yet) or their saved
+// roster, plus the weekly elimination/immunity picks.
 import { redirect } from "react-router";
 import type { Route } from "./+types/dashboard";
 import pool from "../db.server";
 import { requireUserId } from "../session.server";
-import { TEAM_SIZE, IN_SHOW_TEAMS } from "../constants";
+import { getOrCreateFantasyPlayer } from "../players.server";
 import {
-  isTeamLocked,
-  TEAM_LOCK_DEADLINE_LABEL,
-  getWeeklyPicksDeadlineLabel,
-  getCurrentWeekNumber,
-} from "../deadlines.server";
+  getCurrentSeason,
+  getCurrentEpisode,
+  getDraftLockAt,
+  isLocked,
+  formatPacific,
+} from "../season.server";
 import { TopBanner } from "../components/TopBanner";
 import { TeamSection } from "../components/TeamSection";
 import { ScoringMetricsModal } from "../components/ScoringMetricsModal";
@@ -31,107 +32,167 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Bounces to /login if there's no active session.
   const userId = await requireUserId(request);
 
-  const result = await pool.query("SELECT username FROM users WHERE id = $1", [
-    userId,
-  ]);
-  const user = result.rows[0] as { username: string };
-
-  // The user's team, if they've already picked one (joins teams ->
-  // team_members -> contestants to get the actual names, not just ids). The
-  // contestant id is included so TeamSection can pre-fill an edit of this
-  // team, and `eliminated` so the roster can flag a member who's since been
-  // voted out — both stay on the roster regardless (see the note on
-  // teamPickableContestants below).
-  const teamResult = await pool.query(
-    `SELECT c.id, c.contestant_name, tm.is_ultimate_survivor, c.eliminated
-     FROM teams t
-     JOIN team_members tm ON tm.team_id = t.id
-     JOIN contestants c ON c.id = tm.contestant_id
-     WHERE t.user_id = $1
-     ORDER BY tm.is_ultimate_survivor DESC, c.contestant_name`,
+  const userResult = await pool.query(
+    "SELECT username, name, email FROM users WHERE id = $1",
     [userId],
+  );
+  const userRow = userResult.rows[0] as {
+    username: string;
+    name: string | null;
+    email: string | null;
+  };
+  const player = await getOrCreateFantasyPlayer(userId, {
+    displayName: userRow.name ?? userRow.username,
+    email: userRow.email,
+  });
+
+  const season = await getCurrentSeason();
+  if (!season) {
+    // No season has been entered yet — nothing else on this page can render
+    // without one.
+    return { user: userRow, season: null as null } as const;
+  }
+
+  // The player's draft, if they've already made one (joins draft_picks ->
+  // contestants to get the actual names, not just ids). `eliminated` is
+  // derived from episode_results (a contestant is out once they show up as
+  // some episode's eliminated_contestant_id), not stored directly — see the
+  // comment on contestants.final_placement in db/schema.sql.
+  const teamResult = await pool.query(
+    `SELECT
+       c.id,
+       c.name,
+       dp.is_ultimate_pick,
+       EXISTS (
+         SELECT 1 FROM episode_results er WHERE er.eliminated_contestant_id = c.id
+       ) AS eliminated
+     FROM draft_picks dp
+     JOIN contestants c ON c.id = dp.contestant_id
+     WHERE dp.season_id = $1 AND dp.player_id = $2
+     ORDER BY dp.is_ultimate_pick DESC, c.name`,
+    [season.id, player.id],
   );
   const team = teamResult.rows.map((row) => ({
     id: row.id as number,
-    name: row.contestant_name as string,
-    isUltimateSurvivor: row.is_ultimate_survivor as boolean,
+    name: row.name as string,
+    isUltimateSurvivor: row.is_ultimate_pick as boolean,
     eliminated: row.eliminated as boolean,
   }));
 
-  // Contestants a team can be built from: anyone still in the game, plus —
-  // so editing an existing team never silently drops someone — anyone
-  // already on *this* user's team even if they've since been eliminated.
-  const teamPickableContestantsResult = await pool.query(
-    `SELECT id, contestant_name FROM contestants
-     WHERE NOT eliminated
-        OR id IN (
-          SELECT tm.contestant_id FROM team_members tm
-          JOIN teams t ON t.id = tm.team_id
-          WHERE t.user_id = $1
-        )
-     ORDER BY contestant_name`,
-    [userId],
+  // Contestants a draft can be built from: anyone in the season still in the
+  // game, plus — so editing an existing draft never silently drops someone —
+  // anyone already drafted by *this* player even if they've since been
+  // eliminated.
+  const draftPickableContestantsResult = await pool.query(
+    `SELECT id, name FROM contestants c
+     WHERE c.season_id = $1
+       AND (
+         NOT EXISTS (
+           SELECT 1 FROM episode_results er WHERE er.eliminated_contestant_id = c.id
+         )
+         OR id IN (
+           SELECT contestant_id FROM draft_picks
+           WHERE season_id = $1 AND player_id = $2
+         )
+       )
+     ORDER BY name`,
+    [season.id, player.id],
   );
-  const teamPickableContestants = teamPickableContestantsResult.rows as {
+  const draftPickableContestants = draftPickableContestantsResult.rows as {
     id: number;
-    contestant_name: string;
+    name: string;
   }[];
 
-  // Contestants who can still be predicted to be voted out or win immunity
-  // this week — always just whoever hasn't been eliminated yet.
+  // Contestants who can still be predicted to be voted out this week —
+  // always just whoever in the season hasn't been eliminated yet.
   const activeContestantsResult = await pool.query(
-    "SELECT id, contestant_name FROM contestants WHERE NOT eliminated ORDER BY contestant_name",
+    `SELECT c.id, c.name FROM contestants c
+     WHERE c.season_id = $1
+       AND NOT EXISTS (
+         SELECT 1 FROM episode_results er WHERE er.eliminated_contestant_id = c.id
+       )
+     ORDER BY c.name`,
+    [season.id],
   );
   const activeContestants = activeContestantsResult.rows as {
     id: number;
-    contestant_name: string;
+    name: string;
   }[];
 
-  // This week's predictions, if the user has already made them (null until
-  // their first submission this week). The eliminated contestant's name is
-  // joined in directly here (rather than looked up from activeContestants)
-  // so the display box is correct even if their eliminated status changes
-  // after the pick was made. The immunity pick is just a team name, so it
-  // needs no join.
-  const currentWeek = getCurrentWeekNumber();
-  const weeklyPicksResult = await pool.query(
-    `SELECT
-       wp.predicted_eliminated_id,
-       ec.contestant_name AS eliminated_name,
-       wp.predicted_immunity_winner_team
-     FROM weekly_picks wp
-     JOIN contestants ec ON ec.id = wp.predicted_eliminated_id
-     WHERE wp.user_id = $1 AND wp.week_number = $2`,
-    [userId, currentWeek],
+  // This season's tribes — the choices for the weekly immunity pick.
+  const tribesResult = await pool.query(
+    "SELECT id, name, color FROM tribes WHERE season_id = $1 ORDER BY name",
+    [season.id],
   );
-  const weeklyPicksRow = weeklyPicksResult.rows[0] as
-    | {
-        predicted_eliminated_id: number;
-        eliminated_name: string;
-        predicted_immunity_winner_team: string;
-      }
-    | undefined;
-  const weeklyPicks = weeklyPicksRow
-    ? {
-        eliminatedId: weeklyPicksRow.predicted_eliminated_id,
-        eliminatedName: weeklyPicksRow.eliminated_name,
-        immunityWinnerTeam: weeklyPicksRow.predicted_immunity_winner_team,
-      }
-    : null;
+  const tribes = tribesResult.rows as {
+    id: number;
+    name: string;
+    color: string;
+  }[];
+
+  const draftLockAt = await getDraftLockAt(season.id);
+  const currentEpisode = await getCurrentEpisode(season.id);
+
+  // This episode's predictions, if the player has already made them (null
+  // until their first submission for this episode, or if every episode has
+  // already locked). The eliminated contestant's and tribe's names are
+  // joined in directly here so the display box stays correct even if their
+  // state changes after the pick was made.
+  let weeklyPicks: {
+    eliminationPickId: number;
+    eliminationPickName: string;
+    immunityTribePickId: number;
+    immunityTribePickName: string;
+  } | null = null;
+  if (currentEpisode) {
+    const weeklyPicksResult = await pool.query(
+      `SELECT
+         wp.elimination_pick_id,
+         c.name AS elimination_pick_name,
+         wp.immunity_tribe_pick_id,
+         t.name AS immunity_tribe_pick_name
+       FROM weekly_picks wp
+       JOIN contestants c ON c.id = wp.elimination_pick_id
+       JOIN tribes t ON t.id = wp.immunity_tribe_pick_id
+       WHERE wp.episode_id = $1 AND wp.player_id = $2`,
+      [currentEpisode.id, player.id],
+    );
+    const row = weeklyPicksResult.rows[0] as
+      | {
+          elimination_pick_id: number;
+          elimination_pick_name: string;
+          immunity_tribe_pick_id: number;
+          immunity_tribe_pick_name: string;
+        }
+      | undefined;
+    weeklyPicks = row
+      ? {
+          eliminationPickId: row.elimination_pick_id,
+          eliminationPickName: row.elimination_pick_name,
+          immunityTribePickId: row.immunity_tribe_pick_id,
+          immunityTribePickName: row.immunity_tribe_pick_name,
+        }
+      : null;
+  }
 
   return {
-    user,
+    user: userRow,
+    season,
     team,
-    teamPickableContestants,
+    draftPickableContestants,
     activeContestants,
+    tribes,
     weeklyPicks,
-    isTeamLocked: isTeamLocked(),
-    teamLockDeadlineLabel: TEAM_LOCK_DEADLINE_LABEL,
-    weeklyPicksDeadlineLabel: getWeeklyPicksDeadlineLabel(),
-  };
+    hasCurrentEpisode: currentEpisode !== null,
+    isDraftLocked: isLocked(draftLockAt),
+    draftLockLabel: draftLockAt ? formatPacific(draftLockAt) : null,
+    weeklyPicksLockLabel: currentEpisode
+      ? formatPacific(currentEpisode.picksLockAt)
+      : null,
+  } as const;
 }
 
-// The dashboard has two independent forms (team picker, weekly picks) both
+// The dashboard has two independent forms (draft picker, weekly picks) both
 // posting to this same route, so each submission carries a hidden `intent`
 // field to say which one it is. Each branch's error is tagged with the same
 // intent, so the two forms — rendered on the page at the same time — only
@@ -141,26 +202,56 @@ export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
-  if (intent === "weekly-picks") {
-    return weeklyPicksAction(userId, formData);
+  const season = await getCurrentSeason();
+  if (!season) {
+    return { intent: "create-team" as const, error: "No active season" };
   }
-  return createOrUpdateTeamAction(userId, formData);
+
+  const userResult = await pool.query(
+    "SELECT username, name, email FROM users WHERE id = $1",
+    [userId],
+  );
+  const userRow = userResult.rows[0] as {
+    username: string;
+    name: string | null;
+    email: string | null;
+  };
+  const player = await getOrCreateFantasyPlayer(userId, {
+    displayName: userRow.name ?? userRow.username,
+    email: userRow.email,
+  });
+
+  if (intent === "weekly-picks") {
+    return weeklyPicksAction(player.id, season.id, formData);
+  }
+  return createOrUpdateDraftAction(player.id, season.id, formData);
 }
 
-// Creates the user's team the first time, or replaces its members if they
-// already have one (editing) — one of the TEAM_SIZE members flagged as the
-// "Ultimate Survivor" pick. Both cases run in a single transaction, so a
-// failure partway through can't leave a half-saved team behind. Blocked
-// entirely once the draft has locked, since that's checked server-side too
-// (not just by hiding the UI) in case a request is replayed after the
-// deadline passes.
-async function createOrUpdateTeamAction(userId: number, formData: FormData) {
-  if (isTeamLocked()) {
+// Creates the player's draft the first time, or replaces it if they already
+// have one (editing) — one of the season's finalist_count picks flagged as
+// the "Ultimate Survivor" pick. Runs in a single transaction, so a failure
+// partway through can't leave a half-saved draft behind. Blocked entirely
+// once the draft has locked, since that's checked server-side too (not just
+// by hiding the UI) in case a request is replayed after the deadline
+// passes.
+async function createOrUpdateDraftAction(
+  playerId: number,
+  seasonId: number,
+  formData: FormData,
+) {
+  const draftLockAt = await getDraftLockAt(seasonId);
+  if (isLocked(draftLockAt)) {
     return {
       intent: "create-team" as const,
-      error: "Team selection is locked and can no longer be changed",
+      error: "The draft is locked and can no longer be changed",
     };
   }
+
+  const {
+    rows: [{ finalist_count: finalistCount }],
+  } = await pool.query("SELECT finalist_count FROM seasons WHERE id = $1", [
+    seasonId,
+  ]);
 
   // `getAll` returns every checked checkbox's value; wrapping in a Set drops
   // any accidental duplicates before we validate the count.
@@ -169,19 +260,19 @@ async function createOrUpdateTeamAction(userId: number, formData: FormData) {
   ];
   const ultimateSurvivorId = Number(formData.get("ultimateSurvivorId"));
 
-  // The team-size rule and "the Ultimate Survivor pick must be one of the
+  // The roster-size rule and "the Ultimate Survivor pick must be one of the
   // selected contestants" rule both live here in application code rather
   // than as database constraints, so this is the one place that needs to
   // change if either rule does.
   if (
-    contestantIds.length !== TEAM_SIZE ||
+    contestantIds.length !== finalistCount ||
     contestantIds.some((id) => !Number.isInteger(id)) ||
     !Number.isInteger(ultimateSurvivorId) ||
     !contestantIds.includes(ultimateSurvivorId)
   ) {
     return {
       intent: "create-team" as const,
-      error: `Select ${TEAM_SIZE} contestants and choose your Ultimate Survivor`,
+      error: `Select ${finalistCount} contestants and choose your Ultimate Survivor`,
     };
   }
 
@@ -190,28 +281,17 @@ async function createOrUpdateTeamAction(userId: number, formData: FormData) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    // `ON CONFLICT ... DO UPDATE` (rather than plain INSERT) is what makes
-    // this work for both a brand-new team and an edit of an existing one —
-    // it returns the existing row's id when the user already has a team,
-    // instead of failing on the UNIQUE(user_id) constraint.
-    const {
-      rows: [team],
-    } = await client.query(
-      `INSERT INTO teams (user_id) VALUES ($1)
-       ON CONFLICT (user_id) DO UPDATE SET user_id = EXCLUDED.user_id
-       RETURNING id`,
-      [userId],
+    // Simplest correct way to handle an edit: drop the old draft and
+    // re-insert the new one, rather than diffing old vs. new picks.
+    await client.query(
+      "DELETE FROM draft_picks WHERE season_id = $1 AND player_id = $2",
+      [seasonId, playerId],
     );
-    // Simplest correct way to handle an edit: drop the old roster and
-    // re-insert the new one, rather than diffing old vs. new members.
-    await client.query("DELETE FROM team_members WHERE team_id = $1", [
-      team.id,
-    ]);
     for (const contestantId of contestantIds) {
       await client.query(
-        `INSERT INTO team_members (team_id, contestant_id, is_ultimate_survivor)
-         VALUES ($1, $2, $3)`,
-        [team.id, contestantId, contestantId === ultimateSurvivorId],
+        `INSERT INTO draft_picks (season_id, player_id, contestant_id, is_ultimate_pick)
+         VALUES ($1, $2, $3, $4)`,
+        [seasonId, playerId, contestantId, contestantId === ultimateSurvivorId],
       );
     }
     await client.query("COMMIT");
@@ -219,7 +299,7 @@ async function createOrUpdateTeamAction(userId: number, formData: FormData) {
     await client.query("ROLLBACK");
     return {
       intent: "create-team" as const,
-      error: "Could not save your team",
+      error: "Could not save your draft",
     };
   } finally {
     // Always release the connection back to the pool, success or failure.
@@ -231,37 +311,46 @@ async function createOrUpdateTeamAction(userId: number, formData: FormData) {
   return redirect("/dashboard");
 }
 
-// Saves (or updates) the user's prediction for who gets voted out and who
-// wins immunity this week. Upserted on (user_id, week_number) — editing this
-// week's picks again overwrites them, but past weeks stay untouched, so
-// history builds up for the /scores page. Unlike the team draft, there's no
-// deadline enforcement here: next week's picks become available at the same
-// moment this week's are due, so the form is always open (see the comment on
-// WEEKLY_LOCK_DAY in deadlines.server.ts).
-async function weeklyPicksAction(userId: number, formData: FormData) {
-  const eliminatedId = Number(formData.get("eliminatedId"));
-  const immunityWinnerTeam = formData.get("immunityWinnerTeam");
+// Saves (or updates) the player's prediction for who gets voted out and
+// which tribe wins immunity, for whichever episode is currently open for
+// picks. Upserted on (episode_id, player_id) — editing this episode's picks
+// again overwrites them, but past episodes stay untouched, so history
+// builds up for the /leaderboard page.
+async function weeklyPicksAction(
+  playerId: number,
+  seasonId: number,
+  formData: FormData,
+) {
+  const currentEpisode = await getCurrentEpisode(seasonId);
+  if (!currentEpisode) {
+    return {
+      intent: "weekly-picks" as const,
+      error: "There's no episode currently open for picks",
+    };
+  }
+
+  const eliminationPickId = Number(formData.get("eliminationPickId"));
+  const immunityTribePickId = Number(formData.get("immunityTribePickId"));
 
   if (
-    !Number.isInteger(eliminatedId) ||
-    typeof immunityWinnerTeam !== "string" ||
-    !IN_SHOW_TEAMS.includes(immunityWinnerTeam as (typeof IN_SHOW_TEAMS)[number])
+    !Number.isInteger(eliminationPickId) ||
+    !Number.isInteger(immunityTribePickId)
   ) {
     return {
       intent: "weekly-picks" as const,
-      error: "Pick a contestant and an immunity team",
+      error: "Pick a contestant and an immunity tribe",
     };
   }
 
   try {
     await pool.query(
-      `INSERT INTO weekly_picks (user_id, week_number, predicted_eliminated_id, predicted_immunity_winner_team)
+      `INSERT INTO weekly_picks (episode_id, player_id, elimination_pick_id, immunity_tribe_pick_id)
        VALUES ($1, $2, $3, $4)
-       ON CONFLICT (user_id, week_number) DO UPDATE SET
-         predicted_eliminated_id = EXCLUDED.predicted_eliminated_id,
-         predicted_immunity_winner_team = EXCLUDED.predicted_immunity_winner_team,
-         updated_at = now()`,
-      [userId, getCurrentWeekNumber(), eliminatedId, immunityWinnerTeam],
+       ON CONFLICT (episode_id, player_id) DO UPDATE SET
+         elimination_pick_id = EXCLUDED.elimination_pick_id,
+         immunity_tribe_pick_id = EXCLUDED.immunity_tribe_pick_id,
+         submitted_at = now()`,
+      [currentEpisode.id, playerId, eliminationPickId, immunityTribePickId],
     );
   } catch {
     return {
@@ -280,15 +369,31 @@ export default function Dashboard({
   loaderData,
   actionData,
 }: Route.ComponentProps) {
+  const { user } = loaderData;
+
+  if (!loaderData.season) {
+    return (
+      <main className="min-h-screen bg-background">
+        <TopBanner username={user.username} page="dashboard" />
+        <div className="mx-auto max-w-2xl space-y-8 px-4 py-12">
+          <p className="text-center text-primary/70">
+            No active season yet — check back soon.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   const {
-    user,
     team,
-    teamPickableContestants,
+    draftPickableContestants,
     activeContestants,
+    tribes,
     weeklyPicks,
-    isTeamLocked: teamLocked,
-    teamLockDeadlineLabel,
-    weeklyPicksDeadlineLabel,
+    hasCurrentEpisode,
+    isDraftLocked,
+    draftLockLabel,
+    weeklyPicksLockLabel,
   } = loaderData;
   const hasTeam = team.length > 0;
 
@@ -296,36 +401,49 @@ export default function Dashboard({
     <main className="min-h-screen bg-background">
       <TopBanner username={user.username} page="dashboard" />
       <div className="mx-auto max-w-2xl space-y-8 px-4 py-12">
-        <WeeklyPicksModal
-          key={JSON.stringify(weeklyPicks)}
-          contestants={activeContestants}
-          currentPicks={weeklyPicks}
-          error={
-            actionData?.intent === "weekly-picks"
-              ? actionData.error
-              : undefined
-          }
-        />
-        <p className="text-center text-sm text-primary/70">
-          weekly picks are due {weeklyPicksDeadlineLabel} — next week&apos;s
-          picks open right after.
-        </p>
+        {hasCurrentEpisode ? (
+          <>
+            <WeeklyPicksModal
+              key={JSON.stringify(weeklyPicks)}
+              contestants={activeContestants}
+              tribes={tribes}
+              currentPicks={weeklyPicks}
+              error={
+                actionData?.intent === "weekly-picks"
+                  ? actionData.error
+                  : undefined
+              }
+            />
+            {weeklyPicksLockLabel && (
+              <p className="text-center text-sm text-primary/70">
+                this episode&apos;s picks are due {weeklyPicksLockLabel}.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-center text-sm text-primary/70">
+            No episode is currently open for picks.
+          </p>
+        )}
         <TeamSection
           key={JSON.stringify(team)}
           team={team}
-          contestants={teamPickableContestants}
-          isLocked={teamLocked}
+          contestants={draftPickableContestants}
+          finalistCount={loaderData.season.finalistCount}
+          isLocked={isDraftLocked}
           error={
             actionData?.intent === "create-team" ? actionData.error : undefined
           }
         />
         <div className="space-y-1 text-center text-sm text-primary/70">
           <p>
-            {teamLocked
+            {isDraftLocked
               ? hasTeam
-                ? `Your team locked ${teamLockDeadlineLabel} and can no longer be changed.`
-                : `Team selection closed ${teamLockDeadlineLabel} — you didn't pick a team in time.`
-              : `You can change your final 3 until ${teamLockDeadlineLabel}, after which it locks for all eternity.`}
+                ? `Your team locked ${draftLockLabel} and can no longer be changed.`
+                : `Team selection closed ${draftLockLabel} — you didn't pick a team in time.`
+              : draftLockLabel
+                ? `You can change your final ${loaderData.season.finalistCount} until ${draftLockLabel}, after which it locks for all eternity.`
+                : "The draft lock time hasn't been set yet."}
           </p>
         </div>
         <ScoringMetricsModal />

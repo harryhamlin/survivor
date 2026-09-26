@@ -10,6 +10,7 @@ import { TeamRoster } from "./TeamRoster";
 export function TeamSection({
   team,
   contestants,
+  finalistCount,
   isLocked,
   error,
 }: {
@@ -19,7 +20,8 @@ export function TeamSection({
     isUltimateSurvivor: boolean;
     eliminated: boolean;
   }[];
-  contestants: { id: number; contestant_name: string }[];
+  contestants: { id: number; name: string }[];
+  finalistCount: number;
   isLocked: boolean;
   error?: string;
 }) {
@@ -54,6 +56,7 @@ export function TeamSection({
   return (
     <TeamPicker
       contestants={contestants}
+      finalistCount={finalistCount}
       initialSelectedIds={team.map((member) => member.id)}
       initialUltimateSurvivorId={
         team.find((member) => member.isUltimateSurvivor)?.id ?? null

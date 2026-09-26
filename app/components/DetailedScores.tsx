@@ -1,36 +1,37 @@
-// Presentational component for the "/scores" page: a spreadsheet-style
+// Presentational component for the "/leaderboard" page: a spreadsheet-style
 // table wide enough to need horizontal scrolling once there are several
-// weeks of picks. The username column stays pinned in place while the rest
+// episodes of picks. The player column stays pinned in place while the rest
 // scrolls underneath it (`sticky left-0` on both the header and body cells,
 // with an explicit background so scrolled-past columns don't show through).
-// Pure markup — all the data comes from the scores route's loader.
+// Pure markup — all the data comes from the leaderboard route's loader.
 import { TopBanner } from "./TopBanner";
 
-type Pick = { eliminatedName: string; immunityWinnerTeam: string } | null;
+type Pick = {
+  eliminationPickName: string;
+  immunityTribePickName: string;
+} | null;
 
 export function DetailedScores({
   username,
-  weeks,
+  episodeNumbers,
   rows,
 }: {
   username: string;
-  weeks: number[];
+  episodeNumbers: number[];
   rows: {
-    username: string;
+    playerId: number;
     displayName: string;
-    cumulativeScore: number;
+    score: number;
     team: string[];
-    ultimateSurvivor: string | null;
+    ultimatePick: string | null;
     picks: Pick[];
   }[];
 }) {
   return (
     <main className="min-h-screen bg-background">
-      <TopBanner username={username} page="scores" />
+      <TopBanner username={username} page="leaderboard" />
       <div className="mx-auto max-w-5xl space-y-8 px-4 py-12">
-        <h1 className="text-2xl font-semibold text-primary">
-          detailed scores
-        </h1>
+        <h1 className="text-2xl font-semibold text-primary">leaderboard</h1>
 
         {rows.length === 0 ? (
           <p className="text-primary/70">No players yet</p>
@@ -51,41 +52,41 @@ export function DetailedScores({
                   <th className="min-w-[160px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
                     ultimate survivor
                   </th>
-                  {weeks.map((week) => (
+                  {episodeNumbers.map((episodeNumber) => (
                     <th
-                      key={week}
+                      key={episodeNumber}
                       className="min-w-[220px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary last:border-r-0"
                     >
-                      week {week}
+                      episode {episodeNumber}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.username}>
+                  <tr key={row.playerId}>
                     <td className="sticky left-0 z-10 border-b border-r border-primary/40 bg-background px-3 py-2 text-primary">
                       {row.displayName}
                     </td>
                     <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">
-                      {row.cumulativeScore}
+                      {row.score}
                     </td>
                     <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">
                       {row.team.length > 0 ? row.team.join(", ") : "—"}
                     </td>
                     <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">
-                      {row.ultimateSurvivor ?? "—"}
+                      {row.ultimatePick ?? "—"}
                     </td>
                     {row.picks.map((pick, index) => (
                       <td
-                        key={weeks[index]}
+                        key={episodeNumbers[index]}
                         className="border-b border-r border-primary/40 px-3 py-2 text-primary/70 last:border-r-0"
                       >
                         {pick ? (
                           <>
-                            out: {pick.eliminatedName}
+                            out: {pick.eliminationPickName}
                             <br />
-                            imm: <span className="capitalize">{pick.immunityWinnerTeam}</span>
+                            imm: {pick.immunityTribePickName}
                           </>
                         ) : (
                           "—"

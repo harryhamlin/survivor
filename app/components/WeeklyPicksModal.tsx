@@ -1,36 +1,39 @@
-// The week's two predictions: who gets voted out, and who wins immunity.
-// Mirrors TeamSection's pattern — a prominent button before any picks exist,
-// a standalone read-only box with an "edit weekly picks" link once they do —
-// with the actual form living in a modal either way. Submits to the
-// dashboard route's action (see the `intent` field) rather than having a
-// page of its own.
+// The episode's two predictions: who gets voted out, and which tribe wins
+// immunity. Mirrors TeamSection's pattern — a prominent button before any
+// picks exist, a standalone read-only box with an "edit weekly picks" link
+// once they do — with the actual form living in a modal either way. Submits
+// to the dashboard route's action (see the `intent` field) rather than
+// having a page of its own.
 import { useState } from "react";
 import { Form } from "react-router";
-import { IN_SHOW_TEAMS, type InShowTeam } from "../constants";
 
 export function WeeklyPicksModal({
   contestants,
+  tribes,
   currentPicks,
   error,
 }: {
-  contestants: { id: number; contestant_name: string }[];
+  contestants: { id: number; name: string }[];
+  tribes: { id: number; name: string; color: string }[];
   currentPicks: {
-    eliminatedId: number;
-    eliminatedName: string;
-    immunityWinnerTeam: string;
+    eliminationPickId: number;
+    eliminationPickName: string;
+    immunityTribePickId: number;
+    immunityTribePickName: string;
   } | null;
   error?: string;
 }) {
   const [open, setOpen] = useState(false);
-  // Pre-fill with whatever the user already picked this week, if anything.
-  const [eliminatedId, setEliminatedId] = useState<number | "">(
-    currentPicks?.eliminatedId ?? "",
+  // Pre-fill with whatever the player already picked for this episode, if
+  // anything.
+  const [eliminationPickId, setEliminationPickId] = useState<number | "">(
+    currentPicks?.eliminationPickId ?? "",
   );
-  const [immunityWinnerTeam, setImmunityWinnerTeam] = useState<
-    InShowTeam | ""
-  >((currentPicks?.immunityWinnerTeam as InShowTeam) ?? "");
+  const [immunityTribePickId, setImmunityTribePickId] = useState<number | "">(
+    currentPicks?.immunityTribePickId ?? "",
+  );
 
-  const canSubmit = eliminatedId !== "" && immunityWinnerTeam !== "";
+  const canSubmit = eliminationPickId !== "" && immunityTribePickId !== "";
 
   return (
     <div className="space-y-4">
@@ -40,10 +43,10 @@ export function WeeklyPicksModal({
             <p className="text-sm text-primary/70">your weekly picks</p>
             <div className="space-y-1 border border-primary/40 p-4">
               <p className="text-primary">
-                voted out: {currentPicks.eliminatedName}
+                voted out: {currentPicks.eliminationPickName}
               </p>
-              <p className="text-primary capitalize">
-                immunity: {currentPicks.immunityWinnerTeam}
+              <p className="text-primary">
+                immunity: {currentPicks.immunityTribePickName}
               </p>
             </div>
             <button
@@ -95,24 +98,24 @@ export function WeeklyPicksModal({
               </button>
             </div>
             <Form method="post" className="space-y-4">
-              {/* Distinguishes this submission from the team picker's, since
-                  both post to the same dashboard route — see the route's
-                  action. */}
+              {/* Distinguishes this submission from the draft picker's,
+                  since both post to the same dashboard route — see the
+                  route's action. */}
               <input type="hidden" name="intent" value="weekly-picks" />
               <div className="space-y-1">
                 <label
-                  htmlFor="eliminatedId"
+                  htmlFor="eliminationPickId"
                   className="block text-sm text-primary/70"
                 >
                   who will be voted out this week?
                 </label>
                 <select
-                  id="eliminatedId"
-                  name="eliminatedId"
+                  id="eliminationPickId"
+                  name="eliminationPickId"
                   required
-                  value={eliminatedId}
+                  value={eliminationPickId}
                   onChange={(event) =>
-                    setEliminatedId(Number(event.target.value))
+                    setEliminationPickId(Number(event.target.value))
                   }
                   className="w-full border border-primary/40 bg-background px-3 py-2 text-primary"
                 >
@@ -121,34 +124,34 @@ export function WeeklyPicksModal({
                   </option>
                   {contestants.map((contestant) => (
                     <option key={contestant.id} value={contestant.id}>
-                      {contestant.contestant_name}
+                      {contestant.name}
                     </option>
                   ))}
                 </select>
               </div>
               <div className="space-y-1">
                 <span className="block text-sm text-primary/70">
-                  which team will win immunity?
+                  which tribe will win immunity?
                 </span>
                 <input
                   type="hidden"
-                  name="immunityWinnerTeam"
-                  value={immunityWinnerTeam}
+                  name="immunityTribePickId"
+                  value={immunityTribePickId}
                 />
                 <div className="grid grid-cols-2 gap-2">
-                  {IN_SHOW_TEAMS.map((team) => (
+                  {tribes.map((tribe) => (
                     <button
-                      key={team}
+                      key={tribe.id}
                       type="button"
-                      onClick={() => setImmunityWinnerTeam(team)}
-                      aria-pressed={immunityWinnerTeam === team}
-                      className={`border px-3 py-2 capitalize ${
-                        immunityWinnerTeam === team
+                      onClick={() => setImmunityTribePickId(tribe.id)}
+                      aria-pressed={immunityTribePickId === tribe.id}
+                      className={`border px-3 py-2 ${
+                        immunityTribePickId === tribe.id
                           ? "border-primary bg-primary text-black"
                           : "border-primary/40 text-primary hover:border-primary"
                       }`}
                     >
-                      {team}
+                      {tribe.name}
                     </button>
                   ))}
                 </div>

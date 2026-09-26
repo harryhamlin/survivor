@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import type { Route } from "./+types/signup";
 import pool from "../db.server";
 import { createUserSession } from "../session.server";
+import { getOrCreateFantasyPlayer } from "../players.server";
 import { SignupForm } from "../components/SignupForm";
 
 export function meta({}: Route.MetaArgs) {
@@ -32,6 +33,10 @@ export async function action({ request }: Route.ActionArgs) {
        RETURNING id`,
       [username, passwordHash, email, name],
     );
+    // Creates the fantasy_players row eagerly (rather than waiting for the
+    // dashboard's own defensive upsert) so this account shows up on "/"'s
+    // public standings immediately, even before its first dashboard visit.
+    await getOrCreateFantasyPlayer(user.id, { displayName: name, email });
     return createUserSession(user.id, "/dashboard");
   } catch {
     // Most likely cause: `username` or `email` collided with an existing

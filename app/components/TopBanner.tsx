@@ -11,17 +11,20 @@ export function TopBanner({
 }: {
   username: string;
   // Which page is currently showing this banner — determines whether the
-  // secondary link points to "/scores" or back to "/dashboard", so it never
-  // just links to the page you're already on.
-  page: "dashboard" | "scores";
+  // secondary link points to "/leaderboard" or back to "/dashboard", so it
+  // never just links to the page you're already on.
+  page: "dashboard" | "leaderboard";
 }) {
   return (
     <div className="flex w-full items-center justify-between border-b border-primary/40 px-4 py-4">
       <p className="text-lg font-semibold text-primary">{username}</p>
       <div className="flex items-center gap-4">
         {page === "dashboard" ? (
-          <Link to="/scores" className="text-sm text-primary/70 hover:underline">
-            detailed scores
+          <Link
+            to="/leaderboard"
+            className="text-sm text-primary/70 hover:underline"
+          >
+            leaderboard
           </Link>
         ) : (
           <Link

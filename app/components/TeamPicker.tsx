@@ -1,18 +1,22 @@
 // Shown on the dashboard when the logged-in user doesn't have a team yet.
-// Lets them check exactly TEAM_SIZE contestants, designate one of them as
-// their "Ultimate Survivor" pick, and submit to create their team (handled
-// by the dashboard route's `action`).
+// Lets them check exactly `finalistCount` contestants (the season's
+// finalist_count — see db/schema.sql), designate one of them as their
+// "Ultimate Survivor" pick, and submit to create their team (handled by the
+// dashboard route's `action`).
 import { useEffect, useState } from "react";
 import { Form } from "react-router";
-import { TEAM_SIZE } from "../constants";
 
 export function TeamPicker({
   contestants,
+  finalistCount,
   initialSelectedIds = [],
   initialUltimateSurvivorId = null,
   error,
 }: {
-  contestants: { id: number; contestant_name: string }[];
+  contestants: { id: number; name: string }[];
+  // How many contestants must be drafted — the season's finalist_count (see
+  // db/schema.sql), fetched per-season rather than a hardcoded constant.
+  finalistCount: number;
   // Pre-fills the form when editing an already-saved team, rather than
   // starting from an empty selection.
   initialSelectedIds?: number[];
@@ -38,13 +42,13 @@ export function TeamPicker({
     }
   }, [selected, ultimateSurvivorId]);
 
-  // Checks/unchecks a contestant, refusing to add a 4th once TEAM_SIZE are
-  // already selected.
+  // Checks/unchecks a contestant, refusing to add another once
+  // finalistCount are already selected.
   function toggle(id: number) {
     setSelected((prev) =>
       prev.includes(id)
         ? prev.filter((x) => x !== id)
-        : prev.length < TEAM_SIZE
+        : prev.length < finalistCount
           ? [...prev, id]
           : prev,
     );
@@ -60,7 +64,8 @@ export function TeamPicker({
         Set your initial line-up for the season
       </p>
       <p className="text-sm text-primary/70">
-        Pick {TEAM_SIZE} contestants ({selected.length}/{TEAM_SIZE} selected)
+        Pick {finalistCount} contestants ({selected.length}/{finalistCount}{" "}
+        selected)
       </p>
       <Form method="post" className="space-y-6">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -68,8 +73,8 @@ export function TeamPicker({
             const checked = selected.includes(contestant.id);
             // Disable any checkbox that isn't already checked once the
             // limit is reached, so the browser physically can't submit more
-            // than TEAM_SIZE ids.
-            const disabled = !checked && selected.length >= TEAM_SIZE;
+            // than finalistCount ids.
+            const disabled = !checked && selected.length >= finalistCount;
             return (
               <label
                 key={contestant.id}
@@ -89,9 +94,7 @@ export function TeamPicker({
                   onChange={() => toggle(contestant.id)}
                   className="accent-primary"
                 />
-                <span className="text-primary">
-                  {contestant.contestant_name}
-                </span>
+                <span className="text-primary">{contestant.name}</span>
               </label>
             );
           })}
@@ -99,7 +102,7 @@ export function TeamPicker({
 
         {/* Only shows up once the roster is full — picking an Ultimate
             Survivor from a still-changing list would be confusing. */}
-        {selected.length === TEAM_SIZE && (
+        {selected.length === finalistCount && (
           <div className="space-y-2">
             <p className="text-sm text-primary/70">
               Who&apos;s your Ultimate Survivor?
@@ -120,9 +123,7 @@ export function TeamPicker({
                     onChange={() => setUltimateSurvivorId(contestant.id)}
                     className="accent-primary"
                   />
-                  <span className="text-primary">
-                    {contestant.contestant_name}
-                  </span>
+                  <span className="text-primary">{contestant.name}</span>
                 </label>
               ))}
             </div>
@@ -134,7 +135,7 @@ export function TeamPicker({
         {error && <p className="text-sm text-red-500">{error}</p>}
         <button
           type="submit"
-          disabled={selected.length !== TEAM_SIZE || ultimateSurvivorId === null}
+          disabled={selected.length !== finalistCount || ultimateSurvivorId === null}
           className="w-full rounded-lg bg-primary px-3 py-2 font-medium text-black hover:opacity-90 disabled:opacity-40"
         >
           Save team

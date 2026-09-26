@@ -1,9 +1,14 @@
 -- Full database schema for the app. Every statement uses IF NOT EXISTS /
 -- ON CONFLICT-style guards so this file is safe to run repeatedly against
 -- the same database (used both for local setup and, via db/migrate.mjs, as
--- Heroku's release-phase migration on every deploy).
+-- Heroku's release-phase migration on every deploy). During testing, the
+-- convention is to drop a table by hand and let this file recreate it from
+-- scratch rather than writing ALTER statements to migrate its old shape.
 
--- Login accounts. One row per person who can sign in.
+-- Login accounts. One row per person who can sign in. Kept separate from
+-- fantasy_players (below) so "who can log in" and "who's playing the game"
+-- are two different concerns — a login never needs game data, and a player
+-- row is meaningless without one.
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
@@ -13,124 +18,193 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- The pool of Survivor contestants that users can draft onto their team.
+-- One row per season of the show. Everything else (tribes, contestants,
+-- episodes) belongs to a season, so multiple seasons' data can coexist in
+-- the same database without colliding. `finalist_count` is how many
+-- contestants count as "reaching the end" for scoring purposes (see
+-- ScoringMetricsModal) — it's also how many contestants a fantasy player
+-- must draft (see draft_picks below), since those are the same number by
+-- design: you're drafting your guess at who reaches the end.
+CREATE TABLE IF NOT EXISTS seasons (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'upcoming'
+    CHECK (status IN ('upcoming', 'active', 'complete')),
+  finalist_count INTEGER NOT NULL DEFAULT 3
+);
+
+-- A fantasy player's game identity, separate from their login (users).
+-- `user_id` is UNIQUE so a login maps to at most one player. Rows here are
+-- created by the backend (see app/players.server.ts) the first time a login
+-- needs one — signup, or an existing login's first dashboard visit — rather
+-- than by a schema-level trigger.
+CREATE TABLE IF NOT EXISTS fantasy_players (
+  id SERIAL PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  email TEXT UNIQUE,
+  user_id INTEGER UNIQUE NOT NULL REFERENCES users(id)
+);
+
+-- An in-show tribe for a season (e.g. its name and color). Weekly immunity
+-- is predicted per-tribe (see weekly_picks.immunity_tribe_pick_id) rather
+-- than per-contestant, so this needs to be a real table with ids rather than
+-- a hardcoded pair of color strings.
+CREATE TABLE IF NOT EXISTS tribes (
+  id SERIAL PRIMARY KEY,
+  season_id INTEGER NOT NULL REFERENCES seasons(id),
+  name TEXT NOT NULL,
+  color TEXT NOT NULL,
+  UNIQUE (season_id, name)
+);
+
+-- The pool of contestants for a season, draftable by fantasy players.
+-- `tribe_id` is nullable since a freshly-seeded contestant has no tribe
+-- assignment yet (see the note on the seed data below — tribes are assigned
+-- by hand). `final_placement` is nullable until the contestant is out of the
+-- game, at which point it's set to their finishing rank (1 = winner) — this
+-- single column is what both marks a contestant as eliminated (non-null)
+-- and drives "made the final N" scoring (final_placement <= finalist_count),
+-- replacing the separate eliminated/week_eliminated/is_ultimate_survivor
+-- booleans an earlier version of this schema had.
 CREATE TABLE IF NOT EXISTS contestants (
   id SERIAL PRIMARY KEY,
-  contestant_name TEXT UNIQUE NOT NULL,
-  -- This week's score, overwritten each week rather than kept as history —
-  -- see the note on `teams.cumulative_score` below for how the running
-  -- total is tracked separately.
-  weekly_score INTEGER NOT NULL DEFAULT 0,
-  -- true once a contestant is voted out of the show. They stay out of the
-  -- draft pool (see the dashboard loader's contestant query) but are never
-  -- removed from any team_members row that already picked them.
-  eliminated BOOLEAN NOT NULL DEFAULT false,
-  -- The week number this contestant most recently won individual immunity.
-  -- NULL until they've won it at least once.
-  immunity_win_week INTEGER,
-  -- The week number this contestant was voted out. Only ever set once
-  -- `eliminated` is true; NULL otherwise.
-  week_eliminated INTEGER,
-  -- true for the single contestant who actually wins the season. Distinct
-  -- from team_members.is_ultimate_survivor, which is each fantasy team's
-  -- *prediction* of who that will be.
-  is_ultimate_survivor BOOLEAN NOT NULL DEFAULT false,
-  -- Which in-show tribe/team this contestant currently belongs to.
-  in_show_team TEXT
+  season_id INTEGER NOT NULL REFERENCES seasons(id),
+  name TEXT NOT NULL,
+  tribe_id INTEGER REFERENCES tribes(id),
+  final_placement INTEGER,
+  UNIQUE (season_id, name),
+  UNIQUE (season_id, final_placement)
 );
 
-
--- Seed the contestant pool, but only the first time this table is created —
--- checking "is the table empty" (rather than unconditionally inserting) is
--- what makes this safe to re-run without duplicating rows or clobbering any
--- edits made directly in the database later.
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM contestants) THEN
-    INSERT INTO contestants (contestant_name) VALUES
-      ('Aaliyah'),
-      ('Rob'),
-      ('Brady'),
-      ('Patt'),
-      ('Linnea'),
-      ('Cristian'),
-      ('Sharonda'),
-      ('Jenna'),
-      ('Kristin'),
-      ('Ori'),
-      ('Lewis'),
-      ('Kilby'),
-      ('Carter'),
-      ('Alexis'),
-      ('Jelly'),
-      ('Eric'),
-      ('Maggie'),
-      ('Thien An'),
-      ('Michael'),
-      ('Ana'),
-      ('Deven');
-  END IF;
-END $$;
-
--- One team per user. `user_id` is UNIQUE so a user can never end up with a
--- second team — the app enforces "pick your team once" by relying on this
--- constraint (see the dashboard route's action).
-CREATE TABLE IF NOT EXISTS teams (
+-- One row per episode of a season. `picks_lock_at` is a real stored instant
+-- (rather than a computed/hardcoded deadline in app code) — the backend
+-- just compares `now()` against it (see app/season.server.ts), so changing
+-- an air date or lock time is a data edit, not a code change. The draft
+-- itself locks at episode 1's picks_lock_at (there's no separate draft-lock
+-- column). `status` tracks an episode through the pipeline the backend
+-- drives it through: airs, then its result gets recorded and scored.
+CREATE TABLE IF NOT EXISTS episodes (
   id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
-  -- Running total across all weeks. This isn't computed on the fly from
-  -- contestants.weekly_score because that column only ever holds the
-  -- *current* week's numbers — once a new week's scores overwrite it, last
-  -- week's contribution would be lost unless it's already been folded in
-  -- here. Whatever process updates weekly_score each week is expected to
-  -- add that week's points into each affected team's cumulative_score at
-  -- the same time.
-  cumulative_score INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  season_id INTEGER NOT NULL REFERENCES seasons(id),
+  episode_number INTEGER NOT NULL,
+  air_date DATE,
+  picks_lock_at TIMESTAMPTZ NOT NULL,
+  status TEXT NOT NULL DEFAULT 'upcoming'
+    CHECK (status IN ('upcoming', 'aired', 'scored')),
+  UNIQUE (season_id, episode_number)
 );
 
--- Join table linking a team to the contestants drafted onto it. The
--- composite primary key means a given contestant can only appear once per
--- team (inserting the same pair twice fails), but there's deliberately no
--- database-level cap on how many rows a team can have — the "exactly
--- TEAM_SIZE members" rule is enforced in application code (see
--- app/constants.ts and the dashboard action), not here.
-
-CREATE TABLE IF NOT EXISTS team_members (
-  team_id INTEGER NOT NULL REFERENCES teams(id),
+-- A fantasy player's draft for a season: which contestants they picked, and
+-- which one is their "Ultimate Survivor" bonus pick. No `id` column and no
+-- separate roster/team entity — the (season, player, contestant) triple is
+-- the whole row, so a player can't draft the same contestant twice in a
+-- season. The "exactly finalist_count picks" rule is enforced in
+-- application code (the dashboard action), same as the ultimate-pick
+-- validity rule, not here.
+CREATE TABLE IF NOT EXISTS draft_picks (
+  season_id INTEGER NOT NULL REFERENCES seasons(id),
+  player_id INTEGER NOT NULL REFERENCES fantasy_players(id),
   contestant_id INTEGER NOT NULL REFERENCES contestants(id),
-  -- Exactly one of a team's members is designated as its "Ultimate
-  -- Survivor" pick (presumably scored differently from the rest of the
-  -- roster). The unique index below is what actually enforces "at most one
-  -- per team" at the database level — a boolean column alone wouldn't stop
-  -- two rows in the same team both being marked true.
-  is_ultimate_survivor BOOLEAN NOT NULL DEFAULT false,
-  PRIMARY KEY (team_id, contestant_id)
+  is_ultimate_pick BOOLEAN NOT NULL DEFAULT false,
+  PRIMARY KEY (season_id, player_id, contestant_id)
 );
 
 -- A partial unique index (rather than a plain UNIQUE constraint) only
--- applies to rows where is_ultimate_survivor is true, so any number of
--- `false` rows per team are still allowed — just never more than one `true`.
-CREATE UNIQUE INDEX IF NOT EXISTS team_members_one_ultimate_survivor
-  ON team_members (team_id)
-  WHERE is_ultimate_survivor;
+-- applies to rows where is_ultimate_pick is true, so any number of `false`
+-- rows per (season, player) are still allowed — just never more than one
+-- `true`.
+CREATE UNIQUE INDEX IF NOT EXISTS draft_picks_one_ultimate_pick
+  ON draft_picks (season_id, player_id)
+  WHERE is_ultimate_pick;
 
--- A user's predictions for a given week: who gets voted out, and which
--- in-show team wins the immunity challenge. One row per (user, week) — see
--- deadlines.server.ts's getCurrentWeekNumber for how "week" is computed —
--- so history accumulates across the season (used by the /scores page)
--- instead of being overwritten.
+-- A fantasy player's predictions for a given episode: who gets voted out,
+-- and which tribe wins immunity. One row per (episode, player) — editing an
+-- episode's picks again overwrites them, but past episodes' rows stay
+-- untouched, so history accumulates for the /leaderboard page.
 CREATE TABLE IF NOT EXISTS weekly_picks (
   id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id),
-  week_number INTEGER NOT NULL,
-  predicted_eliminated_id INTEGER NOT NULL REFERENCES contestants(id),
-  -- Immunity is currently won as an in-show team (see contestants.in_show_team),
-  -- not by an individual, so this is predicted as a team name rather than a
-  -- contestant id — see IN_SHOW_TEAMS in app/constants.ts for the allowed
-  -- values, mirrored here at the database level.
-  predicted_immunity_winner_team TEXT NOT NULL
-    CHECK (predicted_immunity_winner_team IN ('yellow', 'purple')),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (user_id, week_number)
+  episode_id INTEGER NOT NULL REFERENCES episodes(id),
+  player_id INTEGER NOT NULL REFERENCES fantasy_players(id),
+  elimination_pick_id INTEGER NOT NULL REFERENCES contestants(id),
+  immunity_tribe_pick_id INTEGER NOT NULL REFERENCES tribes(id),
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (episode_id, player_id)
 );
+
+-- The actual outcome of an episode, recorded once it airs. This is what
+-- weekly_picks gets checked against and what marks a contestant eliminated
+-- (a contestant is "out" once they appear as some episode's
+-- eliminated_contestant_id). One row per episode (episode_id is the PK
+-- directly, rather than a separate serial id, since the relationship is
+-- inherently 1:1). Both outcome columns are nullable so a result can be
+-- entered incrementally (e.g. the boot is known before the immunity tribe
+-- is confirmed); `finalized_at` being set is what marks the row as official
+-- rather than a draft-in-progress.
+CREATE TABLE IF NOT EXISTS episode_results (
+  episode_id INTEGER PRIMARY KEY REFERENCES episodes(id),
+  eliminated_contestant_id INTEGER REFERENCES contestants(id),
+  winning_tribe_id INTEGER REFERENCES tribes(id),
+  finalized_at TIMESTAMPTZ
+);
+
+-- Seed a season, its two tribes, its contestant pool, and its first
+-- episode — but only the first time each table is created (checking "is
+-- this table empty" rather than unconditionally inserting) so this file is
+-- safe to run more than once without duplicating rows or clobbering edits
+-- made by hand afterward (e.g. assigning contestants to tribes, or adding
+-- later episodes) — see the note at the top of this file.
+DO $$
+DECLARE
+  current_season_id INTEGER;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM seasons) THEN
+    INSERT INTO seasons (name, status, finalist_count)
+    VALUES ('Survivor 51', 'active', 3);
+  END IF;
+
+  SELECT id INTO current_season_id FROM seasons ORDER BY id LIMIT 1;
+
+  IF NOT EXISTS (SELECT 1 FROM tribes) THEN
+    INSERT INTO tribes (season_id, name, color) VALUES
+      (current_season_id, 'Yellow', 'yellow'),
+      (current_season_id, 'Purple', 'purple');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM contestants) THEN
+    INSERT INTO contestants (season_id, name) VALUES
+      (current_season_id, 'Aaliyah'),
+      (current_season_id, 'Rob'),
+      (current_season_id, 'Brady'),
+      (current_season_id, 'Patt'),
+      (current_season_id, 'Linnea'),
+      (current_season_id, 'Cristian'),
+      (current_season_id, 'Sharonda'),
+      (current_season_id, 'Jenna'),
+      (current_season_id, 'Kristin'),
+      (current_season_id, 'Ori'),
+      (current_season_id, 'Lewis'),
+      (current_season_id, 'Kilby'),
+      (current_season_id, 'Carter'),
+      (current_season_id, 'Alexis'),
+      (current_season_id, 'Jelly'),
+      (current_season_id, 'Eric'),
+      (current_season_id, 'Maggie'),
+      (current_season_id, 'Thien An'),
+      (current_season_id, 'Michael'),
+      (current_season_id, 'Ana'),
+      (current_season_id, 'Deven');
+  END IF;
+
+  -- Episode 1's picks_lock_at is also the draft lock (see the comment on
+  -- the episodes table) — carried over from the previous hardcoded
+  -- TEAM_LOCK_DEADLINE: 8:00 PM Pacific on September 30, 2026.
+  IF NOT EXISTS (SELECT 1 FROM episodes) THEN
+    INSERT INTO episodes (season_id, episode_number, air_date, picks_lock_at)
+    VALUES (
+      current_season_id,
+      1,
+      '2026-09-30',
+      '2026-10-01T03:00:00.000Z'
+    );
+  END IF;
+END $$;
