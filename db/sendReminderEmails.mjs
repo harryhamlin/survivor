@@ -144,11 +144,13 @@ if (alreadySent.length > 0) {
   process.exit(0);
 }
 
-// Everyone who hasn't submitted a pick for this episode yet.
+// Everyone who hasn't submitted a pick for this episode yet and hasn't
+// turned off email notifications (see the account page's toggle).
 const { rows: pendingPlayers } = await pool.query(
   `SELECT u.email FROM fantasy_players fp
    JOIN users u ON u.id = fp.user_id
-   WHERE NOT EXISTS (
+   WHERE u.email_notifications
+   AND NOT EXISTS (
      SELECT 1 FROM weekly_picks wp
      WHERE wp.player_id = fp.id AND wp.episode_id = $1
    )`,

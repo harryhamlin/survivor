@@ -12,7 +12,7 @@ export function AccountForm({
   user,
   actionData,
 }: {
-  user: { name: string | null; email: string };
+  user: { name: string | null; email: string; emailNotifications: boolean };
   actionData: ProfileResult | PasswordResult | undefined;
 }) {
   const profileResult =
@@ -31,7 +31,7 @@ export function AccountForm({
         <Form
           method="post"
           className="space-y-4"
-          key={`${user.name}-${user.email}`}
+          key={`${user.name}-${user.email}-${user.emailNotifications}`}
         >
           <input type="hidden" name="intent" value="update-profile" />
           <div className="space-y-1">
@@ -67,6 +67,18 @@ export function AccountForm({
               defaultValue={user.email}
               className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="emailNotifications"
+              name="emailNotifications"
+              type="checkbox"
+              defaultChecked={user.emailNotifications}
+              className="h-4 w-4 border-primary/40 bg-background accent-primary"
+            />
+            <label htmlFor="emailNotifications" className="text-sm text-primary">
+              Email me reminders about my weekly picks
+            </label>
           </div>
           {/* Set by the route's action — success just as often as failure,
               since there's no redirect to signal it otherwise. */}

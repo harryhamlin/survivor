@@ -16,10 +16,19 @@ export function meta({}: Route.MetaArgs) {
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
   const result = await pool.query(
-    "SELECT name, email FROM users WHERE id = $1",
+    "SELECT name, email, email_notifications FROM users WHERE id = $1",
     [userId],
   );
-  const user = result.rows[0] as { name: string | null; email: string };
+  const row = result.rows[0] as {
+    name: string | null;
+    email: string;
+    email_notifications: boolean;
+  };
+  const user = {
+    name: row.name,
+    email: row.email,
+    emailNotifications: row.email_notifications,
+  };
   return { user };
 }
 
@@ -37,6 +46,9 @@ export async function action({ request }: Route.ActionArgs) {
 async function updateProfileAction(userId: number, formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
+  // Checkboxes only appear in FormData when checked, so a missing field
+  // means "unchecked" here, not "leave it alone".
+  const emailNotifications = formData.get("emailNotifications") === "on";
 
   if (!name || !email) {
     return {
@@ -46,11 +58,10 @@ async function updateProfileAction(userId: number, formData: FormData) {
   }
 
   try {
-    await pool.query("UPDATE users SET name = $1, email = $2 WHERE id = $3", [
-      name,
-      email,
-      userId,
-    ]);
+    await pool.query(
+      "UPDATE users SET name = $1, email = $2, email_notifications = $3 WHERE id = $4",
+      [name, email, emailNotifications, userId],
+    );
   } catch {
     // Most likely cause: `email` collided with another account (it's
     // UNIQUE) — same reasoning as signup.tsx.
