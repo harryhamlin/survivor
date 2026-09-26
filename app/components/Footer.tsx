@@ -65,6 +65,10 @@ export function Footer() {
                 name="report"
                 required
                 rows={4}
+                // Matches MAX_REPORT_LENGTH in the report-bug route's
+                // action — this is just a UX nicety, the real enforcement
+                // happens server-side.
+                maxLength={2000}
                 placeholder="what went wrong?"
                 className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
