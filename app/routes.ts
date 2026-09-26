@@ -18,6 +18,10 @@ export default [
   // draft, score, and full per-episode pick history) — distinct from "/"'s
   // public one-line-per-player summary.
   route("leaderboard", "routes/leaderboard.tsx"),
+  // "/season-results" is the actual in-show record (who was voted out, who
+  // won immunity, episode by episode) — distinct from "/leaderboard", which
+  // is about fantasy players' predictions and scores.
+  route("season-results", "routes/season-results.tsx"),
   route("account", "routes/account.tsx"),
   route("logout", "routes/logout.tsx"),
 ] satisfies RouteConfig;

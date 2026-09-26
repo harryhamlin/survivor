@@ -11,6 +11,7 @@ import { Form, Link } from "react-router";
 const NAV_LINKS = [
   { page: "dashboard", to: "/dashboard", label: "dashboard" },
   { page: "leaderboard", to: "/leaderboard", label: "leaderboard" },
+  { page: "season-results", to: "/season-results", label: "season results" },
   { page: "account", to: "/account", label: "account" },
 ] as const;
 
