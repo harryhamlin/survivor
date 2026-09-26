@@ -53,7 +53,7 @@ export function ContestantsGrid({
               const statusLines = contestant.eliminated
                 ? []
                 : [
-                    contestant.idols ? "idol" : null,
+                    contestant.idols ? "immunity idol" : null,
                     contestant.advantages,
                     contestant.shotInTheDark ? null : "shot in the dark: used",
                   ].filter((line): line is string => Boolean(line));
@@ -101,8 +101,10 @@ export function ContestantsGrid({
                       </svg>
                     )}
                     {statusLines.length > 0 && (
-                      <div className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-0.5 text-center text-[10px] leading-tight text-white">
-                        {statusLines.join(" · ")}
+                      <div className="absolute inset-x-0 bottom-0 space-y-0.5 bg-black/70 px-1 py-0.5 text-center text-[10px] leading-tight text-white">
+                        {statusLines.map((line) => (
+                          <div key={line}>{line}</div>
+                        ))}
                       </div>
                     )}
                   </div>
