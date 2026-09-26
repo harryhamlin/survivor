@@ -11,10 +11,13 @@ export default [
   index("routes/home.tsx"),
   route("login", "routes/login.tsx"),
   route("signup", "routes/signup.tsx"),
+  route("forgot-password", "routes/forgot-password.tsx"),
+  route("reset-password/:token", "routes/reset-password.tsx"),
   route("dashboard", "routes/dashboard.tsx"),
   // "/leaderboard" is the logged-in-only detailed view (every player's
   // draft, score, and full per-episode pick history) — distinct from "/"'s
   // public one-line-per-player summary.
   route("leaderboard", "routes/leaderboard.tsx"),
+  route("account", "routes/account.tsx"),
   route("logout", "routes/logout.tsx"),
 ] satisfies RouteConfig;

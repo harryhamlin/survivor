@@ -18,6 +18,22 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- A "forgot password" email's reset link, one row per link ever issued.
+-- Only a hash of the token is stored (the same reasoning as
+-- users.password_hash) — the plaintext token exists only in the emailed
+-- link itself, so a database leak alone can't be used to reset anyone's
+-- password. `used_at` being set (or `expires_at` having passed) is what
+-- invalidates a link; see app/passwordReset.server.ts for the actual
+-- create/validate/consume logic, kept in the backend rather than here.
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  token_hash TEXT UNIQUE NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- One row per season of the show. Everything else (tribes, contestants,
 -- episodes) belongs to a season, so multiple seasons' data can coexist in
 -- the same database without colliding. `finalist_count` is how many
