@@ -115,8 +115,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS team_members_one_ultimate_survivor
   ON team_members (team_id)
   WHERE is_ultimate_survivor;
 
--- A user's predictions for a given week: who gets voted out, and who wins
--- the immunity challenge. One row per (user, week) — see
+-- A user's predictions for a given week: who gets voted out, and which
+-- in-show team wins the immunity challenge. One row per (user, week) — see
 -- deadlines.server.ts's getCurrentWeekNumber for how "week" is computed —
 -- so history accumulates across the season (used by the /scores page)
 -- instead of being overwritten.
@@ -125,10 +125,12 @@ CREATE TABLE IF NOT EXISTS weekly_picks (
   user_id INTEGER NOT NULL REFERENCES users(id),
   week_number INTEGER NOT NULL,
   predicted_eliminated_id INTEGER NOT NULL REFERENCES contestants(id),
-  predicted_immunity_winner_id INTEGER NOT NULL REFERENCES contestants(id),
-  -- The same contestant can't be predicted to both lose (voted out) and win
-  -- (immunity) in the same week.
-  CHECK (predicted_eliminated_id <> predicted_immunity_winner_id),
+  -- Immunity is currently won as an in-show team (see contestants.in_show_team),
+  -- not by an individual, so this is predicted as a team name rather than a
+  -- contestant id — see IN_SHOW_TEAMS in app/constants.ts for the allowed
+  -- values, mirrored here at the database level.
+  predicted_immunity_winner_team TEXT NOT NULL
+    CHECK (predicted_immunity_winner_team IN ('yellow', 'purple')),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (user_id, week_number)
 );

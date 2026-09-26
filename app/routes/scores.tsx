@@ -54,17 +54,16 @@ export async function loader({ request }: Route.LoaderArgs) {
        u.username,
        wp.week_number,
        ec.contestant_name AS eliminated_name,
-       ic.contestant_name AS immunity_winner_name
+       wp.predicted_immunity_winner_team
      FROM weekly_picks wp
      JOIN users u ON u.id = wp.user_id
      JOIN contestants ec ON ec.id = wp.predicted_eliminated_id
-     JOIN contestants ic ON ic.id = wp.predicted_immunity_winner_id
      ORDER BY u.username ASC, wp.week_number ASC`,
   );
 
   const picksByUsername = new Map<
     string,
-    Map<number, { eliminatedName: string; immunityWinnerName: string }>
+    Map<number, { eliminatedName: string; immunityWinnerTeam: string }>
   >();
   for (const row of picksResult.rows) {
     const username = row.username as string;
@@ -73,7 +72,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     }
     picksByUsername.get(username)!.set(row.week_number as number, {
       eliminatedName: row.eliminated_name as string,
-      immunityWinnerName: row.immunity_winner_name as string,
+      immunityWinnerTeam: row.predicted_immunity_winner_team as string,
     });
   }
 

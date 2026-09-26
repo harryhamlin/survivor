@@ -5,7 +5,7 @@ import { redirect } from "react-router";
 import type { Route } from "./+types/dashboard";
 import pool from "../db.server";
 import { requireUserId } from "../session.server";
-import { TEAM_SIZE } from "../constants";
+import { TEAM_SIZE, IN_SHOW_TEAMS } from "../constants";
 import {
   isTeamLocked,
   TEAM_LOCK_DEADLINE_LABEL,
@@ -88,20 +88,19 @@ export async function loader({ request }: Route.LoaderArgs) {
   }[];
 
   // This week's predictions, if the user has already made them (null until
-  // their first submission this week). Names are joined in directly here
-  // (rather than looked up from activeContestants) so the display box is
-  // correct even if a picked contestant's eliminated status changes after
-  // the pick was made.
+  // their first submission this week). The eliminated contestant's name is
+  // joined in directly here (rather than looked up from activeContestants)
+  // so the display box is correct even if their eliminated status changes
+  // after the pick was made. The immunity pick is just a team name, so it
+  // needs no join.
   const currentWeek = getCurrentWeekNumber();
   const weeklyPicksResult = await pool.query(
     `SELECT
        wp.predicted_eliminated_id,
        ec.contestant_name AS eliminated_name,
-       wp.predicted_immunity_winner_id,
-       ic.contestant_name AS immunity_winner_name
+       wp.predicted_immunity_winner_team
      FROM weekly_picks wp
      JOIN contestants ec ON ec.id = wp.predicted_eliminated_id
-     JOIN contestants ic ON ic.id = wp.predicted_immunity_winner_id
      WHERE wp.user_id = $1 AND wp.week_number = $2`,
     [userId, currentWeek],
   );
@@ -109,16 +108,14 @@ export async function loader({ request }: Route.LoaderArgs) {
     | {
         predicted_eliminated_id: number;
         eliminated_name: string;
-        predicted_immunity_winner_id: number;
-        immunity_winner_name: string;
+        predicted_immunity_winner_team: string;
       }
     | undefined;
   const weeklyPicks = weeklyPicksRow
     ? {
         eliminatedId: weeklyPicksRow.predicted_eliminated_id,
         eliminatedName: weeklyPicksRow.eliminated_name,
-        immunityWinnerId: weeklyPicksRow.predicted_immunity_winner_id,
-        immunityWinnerName: weeklyPicksRow.immunity_winner_name,
+        immunityWinnerTeam: weeklyPicksRow.predicted_immunity_winner_team,
       }
     : null;
 
@@ -243,28 +240,28 @@ async function createOrUpdateTeamAction(userId: number, formData: FormData) {
 // WEEKLY_LOCK_DAY in deadlines.server.ts).
 async function weeklyPicksAction(userId: number, formData: FormData) {
   const eliminatedId = Number(formData.get("eliminatedId"));
-  const immunityWinnerId = Number(formData.get("immunityWinnerId"));
+  const immunityWinnerTeam = formData.get("immunityWinnerTeam");
 
   if (
     !Number.isInteger(eliminatedId) ||
-    !Number.isInteger(immunityWinnerId) ||
-    eliminatedId === immunityWinnerId
+    typeof immunityWinnerTeam !== "string" ||
+    !IN_SHOW_TEAMS.includes(immunityWinnerTeam as (typeof IN_SHOW_TEAMS)[number])
   ) {
     return {
       intent: "weekly-picks" as const,
-      error: "Pick two different contestants",
+      error: "Pick a contestant and an immunity team",
     };
   }
 
   try {
     await pool.query(
-      `INSERT INTO weekly_picks (user_id, week_number, predicted_eliminated_id, predicted_immunity_winner_id)
+      `INSERT INTO weekly_picks (user_id, week_number, predicted_eliminated_id, predicted_immunity_winner_team)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (user_id, week_number) DO UPDATE SET
          predicted_eliminated_id = EXCLUDED.predicted_eliminated_id,
-         predicted_immunity_winner_id = EXCLUDED.predicted_immunity_winner_id,
+         predicted_immunity_winner_team = EXCLUDED.predicted_immunity_winner_team,
          updated_at = now()`,
-      [userId, getCurrentWeekNumber(), eliminatedId, immunityWinnerId],
+      [userId, getCurrentWeekNumber(), eliminatedId, immunityWinnerTeam],
     );
   } catch {
     return {
