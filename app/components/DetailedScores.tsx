@@ -7,16 +7,16 @@
 import { TopBanner } from "./TopBanner";
 
 type Pick = {
-  eliminationPickName: string;
+  eliminationPickName: string | null;
   eliminationCorrect: boolean | null;
-  immunityPickName: string;
+  immunityPickName: string | null;
   immunityCorrect: boolean | null;
 } | null;
 
-// Green once a pick is confirmed correct, red once confirmed incorrect,
-// and the same neutral color as before while the episode's result isn't
-// finalized yet (`correct` is null) — see isEliminationPickCorrect /
-// isImmunityPickCorrect in scoring.server.ts for what "correct" means.
+// Green once a pick is confirmed correct, red once confirmed incorrect, and
+// the same neutral color as before while that category hasn't been graded
+// yet (`correct` is null — either still pending, or voided) — see
+// isPredictionCorrect in scoring.server.ts for what "correct" means.
 function pickColorClass(correct: boolean | null): string {
   if (correct === true) return "text-primary";
   if (correct === false) return "text-red-500";
@@ -119,11 +119,11 @@ export function DetailedScores({
                         {pick ? (
                           <>
                             <span className={pickColorClass(pick.eliminationCorrect)}>
-                              out: {pick.eliminationPickName}
+                              out: {pick.eliminationPickName ?? "—"}
                             </span>
                             <br />
                             <span className={pickColorClass(pick.immunityCorrect)}>
-                              imm: {pick.immunityPickName}
+                              imm: {pick.immunityPickName ?? "—"}
                             </span>
                           </>
                         ) : (

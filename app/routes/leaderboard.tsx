@@ -8,8 +8,8 @@ import { requireUserId } from "../session.server";
 import { getCurrentSeason } from "../season.server";
 import {
   getSeasonScores,
-  isEliminationPickCorrect,
-  isImmunityPickCorrect,
+  getEpisodeScoringInfo,
+  isPredictionCorrect,
 } from "../scoring.server";
 import { DetailedScores } from "../components/DetailedScores";
 
@@ -65,35 +65,31 @@ export async function loader({ request }: Route.LoaderArgs) {
     [season.id],
   );
 
+  // Actual outcomes + scoring status for every episode this season, shared
+  // with getSeasonScores' point calculation (see getEpisodeScoringInfo in
+  // scoring.server.ts) — used here to color each pick correct/incorrect.
+  const infoByEpisodeId = await getEpisodeScoringInfo(season.id);
+
   // Every episode's picks, for every player, in one query — grouped into a
   // per-player map below rather than queried once per player per episode.
   // The two immunity joins are LEFT JOINs (and their names COALESCEd into
   // one) since only one of immunity_tribe_pick_id/immunity_contestant_pick_id
   // is ever set on a given row, depending on that episode's immunity_type.
-  // episode_results is also a LEFT JOIN — most episodes won't have a
-  // finalized result yet — and its columns feed
-  // isEliminationPickCorrect/isImmunityPickCorrect below so the leaderboard
-  // can color each pick correct/incorrect once results are in.
   const picksResult = await pool.query(
     `SELECT
        wp.player_id,
+       wp.episode_id,
        e.episode_number,
-       e.immunity_type,
        wp.elimination_pick_id,
        c.name AS elimination_pick_name,
        wp.immunity_tribe_pick_id,
        wp.immunity_contestant_pick_id,
-       COALESCE(t.name, ic.name) AS immunity_pick_name,
-       er.finalized_at,
-       er.eliminated_contestant_id,
-       er.winning_tribe_id,
-       er.immunity_contestant_id
+       COALESCE(t.name, ic.name) AS immunity_pick_name
      FROM weekly_picks wp
      JOIN episodes e ON e.id = wp.episode_id
-     JOIN contestants c ON c.id = wp.elimination_pick_id
+     LEFT JOIN contestants c ON c.id = wp.elimination_pick_id
      LEFT JOIN tribes t ON t.id = wp.immunity_tribe_pick_id
      LEFT JOIN contestants ic ON ic.id = wp.immunity_contestant_pick_id
-     LEFT JOIN episode_results er ON er.episode_id = wp.episode_id
      WHERE e.season_id = $1
      ORDER BY wp.player_id ASC, e.episode_number ASC`,
     [season.id],
@@ -104,46 +100,44 @@ export async function loader({ request }: Route.LoaderArgs) {
     Map<
       number,
       {
-        eliminationPickName: string;
+        eliminationPickName: string | null;
         eliminationCorrect: boolean | null;
-        immunityPickName: string;
+        immunityPickName: string | null;
         immunityCorrect: boolean | null;
       }
     >
   >();
   for (const row of picksResult.rows) {
     const playerId = row.player_id as number;
-    // Only a finalized result counts as decided — an entered-but-unofficial
-    // result shouldn't color anyone's pick yet.
-    const result =
-      row.finalized_at != null
-        ? {
-            eliminatedContestantId: row.eliminated_contestant_id as
-              | number
-              | null,
-            winningTribeId: row.winning_tribe_id as number | null,
-            immunityContestantId: row.immunity_contestant_id as
-              | number
-              | null,
-          }
-        : null;
-    const pick = {
-      eliminationPickId: row.elimination_pick_id as number,
-      immunityTribePickId: row.immunity_tribe_pick_id as number | null,
-      immunityContestantPickId: row.immunity_contestant_pick_id as
-        | number
-        | null,
-    };
-    const immunityType = row.immunity_type as "tribe" | "individual";
+    const episodeId = row.episode_id as number;
+    const info = infoByEpisodeId.get(episodeId);
+    const eliminationPickId = row.elimination_pick_id as number | null;
+    const immunityPickId = (
+      info?.immunityType === "individual"
+        ? row.immunity_contestant_pick_id
+        : row.immunity_tribe_pick_id
+    ) as number | null;
 
     if (!picksByPlayerId.has(playerId)) {
       picksByPlayerId.set(playerId, new Map());
     }
     picksByPlayerId.get(playerId)!.set(row.episode_number as number, {
-      eliminationPickName: row.elimination_pick_name as string,
-      eliminationCorrect: isEliminationPickCorrect(pick, result),
-      immunityPickName: row.immunity_pick_name as string,
-      immunityCorrect: isImmunityPickCorrect(pick, result, immunityType),
+      eliminationPickName: row.elimination_pick_name as string | null,
+      eliminationCorrect: info
+        ? isPredictionCorrect(
+            info.eliminationStatus,
+            eliminationPickId,
+            info.eliminationWinners,
+          )
+        : null,
+      immunityPickName: row.immunity_pick_name as string | null,
+      immunityCorrect: info
+        ? isPredictionCorrect(
+            info.immunityStatus,
+            immunityPickId,
+            info.immunityWinners,
+          )
+        : null,
     });
   }
 

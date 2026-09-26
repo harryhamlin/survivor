@@ -82,46 +82,124 @@ async function getFinalThreeScores(
   });
 }
 
-// An episode's actual outcome — null wherever that outcome isn't finalized
-// yet, which is what makes a pick against it neither correct nor incorrect
-// (see isEliminationPickCorrect/isImmunityPickCorrect below).
-export type EpisodeResult = {
-  eliminatedContestantId: number | null;
-  winningTribeId: number | null;
-  immunityContestantId: number | null;
+export type ScoringStatus = "pending" | "active" | "void";
+
+// Everything a weekly pick needs to be graded against, for one episode:
+// who actually got eliminated (zero, one, or several contestant ids), who
+// actually won immunity (zero, one, or several tribe/contestant ids,
+// matching `immunityType`), and each category's own scoring status — see
+// episode_eliminations / episode_immunity_winners / episode_scoring in
+// db/schema.sql.
+export type EpisodeScoringInfo = {
+  episodeNumber: number;
+  immunityType: "tribe" | "individual";
+  eliminationWinners: number[];
+  eliminationStatus: ScoringStatus;
+  immunityWinners: number[];
+  immunityStatus: ScoringStatus;
 };
 
-export type WeeklyPick = {
-  eliminationPickId: number;
-  immunityTribePickId: number | null;
-  immunityContestantPickId: number | null;
-};
+// Fetches getEpisodeScoringInfo's data for every episode in a season.
+// Shared by getWeeklyPickScores (which turns it into points) and the
+// leaderboard route (which turns it into green/red pick coloring), so the
+// actual "what happened, and does it count" facts are fetched in exactly
+// one place rather than each caller re-querying episode_eliminations /
+// episode_immunity_winners / episode_scoring itself.
+export async function getEpisodeScoringInfo(
+  seasonId: number,
+): Promise<Map<number, EpisodeScoringInfo>> {
+  const { rows: episodeRows } = await pool.query(
+    `SELECT id, episode_number, immunity_type FROM episodes WHERE season_id = $1`,
+    [seasonId],
+  );
 
-// Whether a player's elimination pick matches the episode's actual boot.
-// Null means "not decided yet" (the result isn't finalized) — shared by the
-// scoring below and the leaderboard's green/red pick coloring, so "what
-// counts as correct" is defined in exactly one place.
-export function isEliminationPickCorrect(
-  pick: WeeklyPick,
-  result: EpisodeResult | null,
-): boolean | null {
-  if (!result) return null;
-  return pick.eliminationPickId === result.eliminatedContestantId;
+  const infoByEpisodeId = new Map<number, EpisodeScoringInfo>();
+  for (const row of episodeRows) {
+    infoByEpisodeId.set(row.id as number, {
+      episodeNumber: row.episode_number as number,
+      immunityType: row.immunity_type as "tribe" | "individual",
+      eliminationWinners: [],
+      eliminationStatus: "pending",
+      immunityWinners: [],
+      immunityStatus: "pending",
+    });
+  }
+
+  // Zero, one, or many rows per episode — see episode_eliminations in
+  // db/schema.sql.
+  const { rows: eliminationRows } = await pool.query(
+    `SELECT episode_id, contestant_id FROM episode_eliminations
+     WHERE episode_id IN (SELECT id FROM episodes WHERE season_id = $1)`,
+    [seasonId],
+  );
+  for (const row of eliminationRows) {
+    infoByEpisodeId
+      .get(row.episode_id as number)
+      ?.eliminationWinners.push(row.contestant_id as number);
+  }
+
+  // Also zero, one, or many rows per episode — exactly one of tribe_id/
+  // contestant_id is set per row (enforced by a CHECK in the schema), so
+  // collecting whichever one is non-null into a single list is safe.
+  const { rows: immunityRows } = await pool.query(
+    `SELECT episode_id, tribe_id, contestant_id FROM episode_immunity_winners
+     WHERE episode_id IN (SELECT id FROM episodes WHERE season_id = $1)`,
+    [seasonId],
+  );
+  for (const row of immunityRows) {
+    const info = infoByEpisodeId.get(row.episode_id as number);
+    const winnerId = (row.tribe_id ?? row.contestant_id) as number;
+    info?.immunityWinners.push(winnerId);
+  }
+
+  const { rows: scoringRows } = await pool.query(
+    `SELECT episode_id, category, status FROM episode_scoring
+     WHERE episode_id IN (SELECT id FROM episodes WHERE season_id = $1)`,
+    [seasonId],
+  );
+  for (const row of scoringRows) {
+    const info = infoByEpisodeId.get(row.episode_id as number);
+    if (!info) continue;
+    if (row.category === "elimination") {
+      info.eliminationStatus = row.status as ScoringStatus;
+    } else {
+      info.immunityStatus = row.status as ScoringStatus;
+    }
+  }
+
+  return infoByEpisodeId;
 }
 
-// Same idea for the immunity pick — which field it's checked against
-// depends on the episode's immunity_type (see db/schema.sql).
-export function isImmunityPickCorrect(
-  pick: WeeklyPick,
-  result: EpisodeResult | null,
-  immunityType: "tribe" | "individual",
+// The one place "does this prediction score points" is decided.
+//   'pending' — not graded yet: null, not zero, so it stays visibly
+//               distinct from "graded and wrong" to any caller that cares.
+//   'void'    — this category doesn't count this episode at all: zero
+//               regardless of the actual outcome or what was predicted.
+//   'active'  — points if the prediction is among the actual winners,
+//               zero otherwise. `prediction` can be null (an episode with
+//               no elimination, say) — never a match, so this correctly
+//               falls through to zero rather than needing a special case.
+export function scorePrediction(
+  status: ScoringStatus,
+  prediction: number | null,
+  winners: number[],
+  points: number,
+): number | null {
+  if (status === "pending") return null;
+  if (status === "void") return 0;
+  return prediction !== null && winners.includes(prediction) ? points : 0;
+}
+
+// Whether a prediction was actually right — for display (the leaderboard's
+// green/red pick coloring), not points. Void and pending both read as "not
+// decided" (null) here, since neither should render as if it were wrong.
+export function isPredictionCorrect(
+  status: ScoringStatus,
+  prediction: number | null,
+  winners: number[],
 ): boolean | null {
-  if (!result) return null;
-  return immunityType === "tribe"
-    ? result.winningTribeId !== null &&
-        pick.immunityTribePickId === result.winningTribeId
-    : result.immunityContestantId !== null &&
-        pick.immunityContestantPickId === result.immunityContestantId;
+  if (status !== "active") return null;
+  return prediction !== null && winners.includes(prediction);
 }
 
 async function getWeeklyPickScores(seasonId: number): Promise<PlayerScore[]> {
@@ -132,52 +210,22 @@ async function getWeeklyPickScores(seasonId: number): Promise<PlayerScore[]> {
     [seasonId],
   );
 
-  const { rows: episodeRows } = await pool.query(
-    `SELECT id, episode_number, immunity_type FROM episodes
-     WHERE season_id = $1
-     ORDER BY episode_number`,
-    [seasonId],
-  );
-
-  const { rows: resultRows } = await pool.query(
-    `SELECT episode_id, eliminated_contestant_id, winning_tribe_id, immunity_contestant_id
-     FROM episode_results
-     WHERE finalized_at IS NOT NULL
-       AND episode_id IN (SELECT id FROM episodes WHERE season_id = $1)`,
-    [seasonId],
-  );
-  const resultByEpisodeId = new Map<number, EpisodeResult>(
-    resultRows.map((row) => [
-      row.episode_id as number,
-      {
-        eliminatedContestantId: row.eliminated_contestant_id as number | null,
-        winningTribeId: row.winning_tribe_id as number | null,
-        immunityContestantId: row.immunity_contestant_id as number | null,
-      },
-    ]),
+  const infoByEpisodeId = await getEpisodeScoringInfo(seasonId);
+  const episodesInOrder = Array.from(infoByEpisodeId.entries()).sort(
+    (a, b) => a[1].episodeNumber - b[1].episodeNumber,
   );
 
   // How many contestants were still in the game right before each
-  // episode's boot (so the person who just got voted out still counts) —
-  // the season's roster size minus whoever was already eliminated in a
-  // strictly earlier, finalized episode.
+  // episode's boot(s) — so anyone voted out *that* episode still counts —
+  // the season's roster size minus however many were already eliminated in
+  // strictly earlier episodes. A multi-boot episode decrements by however
+  // many it eliminated, not just one.
   const remainingCountByEpisodeId = new Map<number, number>();
   let remaining = totalContestants as number;
-  for (const episode of episodeRows) {
-    const episodeId = episode.id as number;
+  for (const [episodeId, info] of episodesInOrder) {
     remainingCountByEpisodeId.set(episodeId, remaining);
-    const result = resultByEpisodeId.get(episodeId);
-    if (result?.eliminatedContestantId != null) {
-      remaining -= 1;
-    }
+    remaining -= info.eliminationWinners.length;
   }
-
-  const immunityTypeByEpisodeId = new Map(
-    episodeRows.map((row) => [
-      row.id as number,
-      row.immunity_type as "tribe" | "individual",
-    ]),
-  );
 
   const { rows: pickRows } = await pool.query(
     `SELECT wp.player_id, wp.episode_id, wp.elimination_pick_id,
@@ -191,33 +239,36 @@ async function getWeeklyPickScores(seasonId: number): Promise<PlayerScore[]> {
   const scoreByPlayerId = new Map<number, number>();
   for (const row of pickRows) {
     const episodeId = row.episode_id as number;
-    const result = resultByEpisodeId.get(episodeId) ?? null;
-    if (!result) continue;
+    const info = infoByEpisodeId.get(episodeId);
+    if (!info) continue;
 
     const playerId = row.player_id as number;
-    const pick: WeeklyPick = {
-      eliminationPickId: row.elimination_pick_id as number,
-      immunityTribePickId: row.immunity_tribe_pick_id as number | null,
-      immunityContestantPickId: row.immunity_contestant_pick_id as
-        | number
-        | null,
-    };
+    const eliminationPickId = row.elimination_pick_id as number | null;
+    const immunityPickId = (
+      info.immunityType === "tribe"
+        ? row.immunity_tribe_pick_id
+        : row.immunity_contestant_pick_id
+    ) as number | null;
+    const remainingCount = remainingCountByEpisodeId.get(episodeId) ?? 0;
 
-    let points = 0;
     // Elimination pick: worth more early in the season, when more people
     // are still in the game and correctly guessing the boot is harder.
-    if (isEliminationPickCorrect(pick, result)) {
-      const remainingCount = remainingCountByEpisodeId.get(episodeId) ?? 0;
-      points += Math.ceil(remainingCount / 4);
-    }
+    const eliminationPoints = scorePrediction(
+      info.eliminationStatus,
+      eliminationPickId,
+      info.eliminationWinners,
+      Math.ceil(remainingCount / 4),
+    );
     // Immunity pick: flat +1 for a tribe win (pre-merge), +3 for an
-    // individual win (post-merge, harder to call with more people to pick
-    // from at once, if not necessarily fewer choices).
-    const immunityType = immunityTypeByEpisodeId.get(episodeId) ?? "tribe";
-    if (isImmunityPickCorrect(pick, result, immunityType)) {
-      points += immunityType === "tribe" ? 1 : 3;
-    }
+    // individual win (post-merge).
+    const immunityPoints = scorePrediction(
+      info.immunityStatus,
+      immunityPickId,
+      info.immunityWinners,
+      info.immunityType === "tribe" ? 1 : 3,
+    );
 
+    const points = (eliminationPoints ?? 0) + (immunityPoints ?? 0);
     scoreByPlayerId.set(playerId, (scoreByPlayerId.get(playerId) ?? 0) + points);
   }
 

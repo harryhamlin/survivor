@@ -51,16 +51,16 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   // The player's draft, if they've already made one (joins draft_picks ->
   // contestants to get the actual names, not just ids). `eliminated` is
-  // derived from episode_results (a contestant is out once they show up as
-  // some episode's eliminated_contestant_id), not stored directly — see the
-  // comment on contestants.final_placement in db/schema.sql.
+  // derived from episode_eliminations (a contestant is out once they show
+  // up there for any episode), not stored directly — see the comment on
+  // contestants.final_placement in db/schema.sql.
   const teamResult = await pool.query(
     `SELECT
        c.id,
        c.name,
        dp.is_ultimate_pick,
        EXISTS (
-         SELECT 1 FROM episode_results er WHERE er.eliminated_contestant_id = c.id
+         SELECT 1 FROM episode_eliminations ee WHERE ee.contestant_id = c.id
        ) AS eliminated
      FROM draft_picks dp
      JOIN contestants c ON c.id = dp.contestant_id
@@ -84,7 +84,7 @@ export async function loader({ request }: Route.LoaderArgs) {
      WHERE c.season_id = $1
        AND (
          NOT EXISTS (
-           SELECT 1 FROM episode_results er WHERE er.eliminated_contestant_id = c.id
+           SELECT 1 FROM episode_eliminations ee WHERE ee.contestant_id = c.id
          )
          OR id IN (
            SELECT contestant_id FROM draft_picks
@@ -105,7 +105,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     `SELECT c.id, c.name FROM contestants c
      WHERE c.season_id = $1
        AND NOT EXISTS (
-         SELECT 1 FROM episode_results er WHERE er.eliminated_contestant_id = c.id
+         SELECT 1 FROM episode_eliminations ee WHERE ee.contestant_id = c.id
        )
      ORDER BY c.name`,
     [season.id],
