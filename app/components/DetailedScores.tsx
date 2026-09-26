@@ -37,7 +37,7 @@ export function DetailedScores({
           <p className="text-primary/70">No players yet</p>
         ) : (
           <div className="overflow-x-auto border border-primary/40">
-            <table className="border-collapse text-sm">
+            <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
                   <th className="sticky left-0 z-10 min-w-[180px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
@@ -46,11 +46,8 @@ export function DetailedScores({
                   <th className="min-w-[100px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
                     score
                   </th>
-                  <th className="min-w-[220px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
+                  <th className="min-w-[260px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
                     final 3
-                  </th>
-                  <th className="min-w-[160px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
-                    ultimate survivor
                   </th>
                   {episodeNumbers.map((episodeNumber) => (
                     <th
@@ -72,10 +69,20 @@ export function DetailedScores({
                       {row.score}
                     </td>
                     <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">
-                      {row.team.length > 0 ? row.team.join(", ") : "—"}
-                    </td>
-                    <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">
-                      {row.ultimatePick ?? "—"}
+                      {row.team.length > 0
+                        ? row.team.map((name, index) => (
+                            <span key={name}>
+                              {index > 0 && ", "}
+                              {name}
+                              {name === row.ultimatePick && (
+                                <span className="text-primary/70">
+                                  {" "}
+                                  (ultimate survivor)
+                                </span>
+                              )}
+                            </span>
+                          ))
+                        : "—"}
                     </td>
                     {row.picks.map((pick, index) => (
                       <td
