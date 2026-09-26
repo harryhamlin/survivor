@@ -59,20 +59,20 @@ export function ContestantsGrid({
                         aria-hidden="true"
                       >
                         <line
-                          x1="4"
-                          y1="4"
-                          x2="96"
-                          y2="96"
+                          x1="0"
+                          y1="0"
+                          x2="100"
+                          y2="100"
                           stroke={ELIMINATED_COLOR}
-                          strokeWidth="6"
+                          strokeWidth="2"
                         />
                         <line
-                          x1="96"
-                          y1="4"
-                          x2="4"
-                          y2="96"
+                          x1="100"
+                          y1="0"
+                          x2="0"
+                          y2="100"
                           stroke={ELIMINATED_COLOR}
-                          strokeWidth="6"
+                          strokeWidth="2"
                         />
                       </svg>
                     )}
