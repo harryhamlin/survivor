@@ -60,7 +60,12 @@ export function DetailedScores({
                   <th className="sticky left-0 z-10 min-w-[180px] border-b border-primary/40 bg-background px-3 py-2 text-left text-primary shadow-[1px_0_0_0_color-mix(in_oklab,var(--color-primary)_40%,transparent)]">
                     player
                   </th>
-                  <th className="min-w-[100px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
+                  {/* A plain border-l here (rather than relying only on the
+                      player column's box-shadow) is what actually guarantees
+                      a visible dividing line at rest — the box-shadow exists
+                      purely to survive horizontal scroll, not to double as
+                      this column's left border. */}
+                  <th className="min-w-[100px] border-b border-l border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
                     score
                   </th>
                   <th className="min-w-[260px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
@@ -85,7 +90,7 @@ export function DetailedScores({
                     <td className="sticky left-0 z-10 border-b border-primary/40 bg-background px-3 py-2 text-primary shadow-[1px_0_0_0_color-mix(in_oklab,var(--color-primary)_40%,transparent)]">
                       {row.displayName}
                     </td>
-                    <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">
+                    <td className="border-b border-l border-r border-primary/40 px-3 py-2 text-primary">
                       {row.score}
                     </td>
                     <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">
