@@ -10,7 +10,7 @@ export function SignupForm({ error }: { error?: string }) {
           className="font-heading whitespace-nowrap text-center tracking-wide text-primary"
           style={{ fontSize: "clamp(1.5rem, 7vw, 2.25rem)" }}
         >
-          <Link to="/" className="hover:underline">
+          <Link to="/">
             Fantasy Survivor 51
           </Link>
         </h1>
