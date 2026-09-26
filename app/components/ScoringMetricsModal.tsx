@@ -50,6 +50,29 @@ export function ScoringMetricsModal() {
             </div>
             <div className="space-y-3 text-primary/80">
               <div>
+                <p className="font-medium text-primary">Weekly picks</p>
+                <p className="text-sm">
+                  Scored episode by episode, as soon as that episode&apos;s
+                  results are in.
+                </p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+                  <li>
+                    +1 point for correctly picking the tribe that wins
+                    immunity.
+                  </li>
+                  <li>
+                    +3 points for correctly picking who wins immunity, once
+                    the season switches to individual immunity.
+                  </li>
+                  <li>
+                    Correctly picking who&apos;s voted out is worth more
+                    early in the season, when more people are still in the
+                    game: (contestants remaining, including the person
+                    voted out) ÷ 4, rounded up.
+                  </li>
+                </ul>
+              </div>
+              <div>
                 <p className="font-medium text-primary">Final 3</p>
                 <p className="text-sm">
                   Scored only once, at the end of the season — not week by

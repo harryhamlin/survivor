@@ -8,8 +8,20 @@ import { TopBanner } from "./TopBanner";
 
 type Pick = {
   eliminationPickName: string;
+  eliminationCorrect: boolean | null;
   immunityPickName: string;
+  immunityCorrect: boolean | null;
 } | null;
+
+// Green once a pick is confirmed correct, red once confirmed incorrect,
+// and the same neutral color as before while the episode's result isn't
+// finalized yet (`correct` is null) — see isEliminationPickCorrect /
+// isImmunityPickCorrect in scoring.server.ts for what "correct" means.
+function pickColorClass(correct: boolean | null): string {
+  if (correct === true) return "text-primary";
+  if (correct === false) return "text-red-500";
+  return "text-primary/70";
+}
 
 export function DetailedScores({
   displayName,
@@ -102,16 +114,20 @@ export function DetailedScores({
                     {row.picks.map((pick, index) => (
                       <td
                         key={episodeNumbers[index]}
-                        className="whitespace-nowrap border-b border-r border-primary/40 px-3 py-2 text-primary/70 last:border-r-0"
+                        className="whitespace-nowrap border-b border-r border-primary/40 px-3 py-2 last:border-r-0"
                       >
                         {pick ? (
                           <>
-                            out: {pick.eliminationPickName}
+                            <span className={pickColorClass(pick.eliminationCorrect)}>
+                              out: {pick.eliminationPickName}
+                            </span>
                             <br />
-                            imm: {pick.immunityPickName}
+                            <span className={pickColorClass(pick.immunityCorrect)}>
+                              imm: {pick.immunityPickName}
+                            </span>
                           </>
                         ) : (
-                          "—"
+                          <span className="text-primary/70">—</span>
                         )}
                       </td>
                     ))}
