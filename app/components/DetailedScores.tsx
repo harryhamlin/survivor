@@ -12,11 +12,11 @@ type Pick = {
 } | null;
 
 export function DetailedScores({
-  username,
+  displayName,
   episodeNumbers,
   rows,
 }: {
-  username: string;
+  displayName: string;
   episodeNumbers: number[];
   rows: {
     playerId: number;
@@ -29,7 +29,7 @@ export function DetailedScores({
 }) {
   return (
     <main className="min-h-screen bg-background">
-      <TopBanner username={username} page="leaderboard" />
+      <TopBanner displayName={displayName} page="leaderboard" />
       <div className="mx-auto max-w-5xl space-y-8 px-4 py-12">
         <h1 className="text-2xl font-semibold text-primary">leaderboard</h1>
 
@@ -40,7 +40,12 @@ export function DetailedScores({
             <table className="border-collapse text-sm">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 min-w-[180px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
+                  {/* The right edge uses a box-shadow instead of border-r —
+                      a `border-collapse` table's collapsed borders don't
+                      reliably stay pinned to a `sticky` cell while scrolling
+                      in every browser, but a box-shadow (outside the table
+                      border model entirely) always travels with it. */}
+                  <th className="sticky left-0 z-10 min-w-[180px] border-b border-primary/40 bg-background px-3 py-2 text-left text-primary shadow-[1px_0_0_0_color-mix(in_oklab,var(--color-primary)_40%,transparent)]">
                     player
                   </th>
                   <th className="min-w-[100px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
@@ -65,7 +70,7 @@ export function DetailedScores({
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.playerId}>
-                    <td className="sticky left-0 z-10 border-b border-r border-primary/40 bg-background px-3 py-2 text-primary">
+                    <td className="sticky left-0 z-10 border-b border-primary/40 bg-background px-3 py-2 text-primary shadow-[1px_0_0_0_color-mix(in_oklab,var(--color-primary)_40%,transparent)]">
                       {row.displayName}
                     </td>
                     <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">

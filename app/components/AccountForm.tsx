@@ -1,8 +1,8 @@
 // Two independent forms for the "/account" page — profile info (name,
-// email, username) and change password — each posting to the same route
-// with its own `intent`, tagged the same way so each only ever shows its
-// own success/error message (mirrors the dashboard route's two-form
-// pattern). Pure markup; the actual update logic lives in the route.
+// email) and change password — each posting to the same route with its own
+// `intent`, tagged the same way so each only ever shows its own
+// success/error message (mirrors the dashboard route's two-form pattern).
+// Pure markup; the actual update logic lives in the route.
 import { Form } from "react-router";
 
 type ProfileResult = { intent: "update-profile"; error?: string; success?: boolean };
@@ -12,7 +12,7 @@ export function AccountForm({
   user,
   actionData,
 }: {
-  user: { username: string; name: string | null; email: string | null };
+  user: { name: string | null; email: string };
   actionData: ProfileResult | PasswordResult | undefined;
 }) {
   const profileResult =
@@ -31,7 +31,7 @@ export function AccountForm({
         <Form
           method="post"
           className="space-y-4"
-          key={`${user.name}-${user.email}-${user.username}`}
+          key={`${user.name}-${user.email}`}
         >
           <input type="hidden" name="intent" value="update-profile" />
           <div className="space-y-1">
@@ -64,24 +64,7 @@ export function AccountForm({
               type="email"
               autoComplete="email"
               required
-              defaultValue={user.email ?? ""}
-              className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-          <div className="space-y-1">
-            <label
-              htmlFor="username"
-              className="block text-sm font-medium text-primary"
-            >
-              Username
-            </label>
-            <input
-              id="username"
-              name="username"
-              type="text"
-              autoComplete="username"
-              required
-              defaultValue={user.username}
+              defaultValue={user.email}
               className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>

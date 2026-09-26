@@ -22,16 +22,16 @@ export function LoginForm({ error }: { error?: string }) {
           <Form method="post" className="space-y-4">
             <div className="space-y-1">
               <label
-                htmlFor="username"
+                htmlFor="email"
                 className="block text-sm font-medium text-primary"
               >
-                Username
+                Email
               </label>
               <input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
                 required
                 className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />

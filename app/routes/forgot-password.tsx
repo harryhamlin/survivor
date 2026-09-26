@@ -33,8 +33,8 @@ export async function action({ request }: Route.ActionArgs) {
     const resetLink = `${new URL(request.url).origin}/reset-password/${token}`;
     await sendEmail({
       to: email,
-      subject: "Reset your Fantasy Survivor password",
-      text: `Someone requested a password reset for your Fantasy Survivor account.\n\nReset your password: ${resetLink}\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.`,
+      subject: "reset your fantasy survivor password",
+      text: `did u forget ur password? \n\nreset: ${resetLink}\n\n`,
     });
   }
 

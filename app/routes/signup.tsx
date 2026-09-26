@@ -15,10 +15,9 @@ export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
-  const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  if (!name || !email || !username || !password) {
+  if (!name || !email || !password) {
     return { error: "All fields are required" };
   }
 
@@ -28,10 +27,10 @@ export async function action({ request }: Route.ActionArgs) {
     const {
       rows: [user],
     } = await pool.query(
-      `INSERT INTO users (username, password_hash, email, name)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO users (email, password_hash, name)
+       VALUES ($1, $2, $3)
        RETURNING id`,
-      [username, passwordHash, email, name],
+      [email, passwordHash, name],
     );
     // Creates the fantasy_players row eagerly (rather than waiting for the
     // dashboard's own defensive upsert) so this account shows up on "/"'s
@@ -39,10 +38,9 @@ export async function action({ request }: Route.ActionArgs) {
     await getOrCreateFantasyPlayer(user.id, { displayName: name, email });
     return createUserSession(user.id, "/dashboard");
   } catch {
-    // Most likely cause: `username` or `email` collided with an existing
-    // account (both columns are UNIQUE) — Postgres doesn't say which without
-    // parsing the error further, so a single generic message covers both.
-    return { error: "Username or email is already taken" };
+    // Most likely cause: `email` collided with an existing account (it's
+    // UNIQUE).
+    return { error: "Email is already taken" };
   }
 }
 

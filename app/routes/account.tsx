@@ -1,7 +1,7 @@
 // The "/account" route: lets a logged-in player update their profile info
-// (name, email, username) or change their password. Two independent forms
-// posting to this same route, distinguished by a hidden `intent` field —
-// same pattern as the dashboard route's draft-picker/weekly-picks forms.
+// (name, email) or change their password. Two independent forms posting to
+// this same route, distinguished by a hidden `intent` field — same pattern
+// as the dashboard route's draft-picker/weekly-picks forms.
 import bcrypt from "bcryptjs";
 import type { Route } from "./+types/account";
 import pool from "../db.server";
@@ -16,14 +16,10 @@ export function meta({}: Route.MetaArgs) {
 export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
   const result = await pool.query(
-    "SELECT username, name, email FROM users WHERE id = $1",
+    "SELECT name, email FROM users WHERE id = $1",
     [userId],
   );
-  const user = result.rows[0] as {
-    username: string;
-    name: string | null;
-    email: string | null;
-  };
+  const user = result.rows[0] as { name: string | null; email: string };
   return { user };
 }
 
@@ -41,9 +37,8 @@ export async function action({ request }: Route.ActionArgs) {
 async function updateProfileAction(userId: number, formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
-  const username = String(formData.get("username") ?? "").trim();
 
-  if (!name || !email || !username) {
+  if (!name || !email) {
     return {
       intent: "update-profile" as const,
       error: "All fields are required",
@@ -51,16 +46,17 @@ async function updateProfileAction(userId: number, formData: FormData) {
   }
 
   try {
-    await pool.query(
-      "UPDATE users SET name = $1, email = $2, username = $3 WHERE id = $4",
-      [name, email, username, userId],
-    );
+    await pool.query("UPDATE users SET name = $1, email = $2 WHERE id = $3", [
+      name,
+      email,
+      userId,
+    ]);
   } catch {
-    // Most likely cause: `username` or `email` collided with another
-    // account (both columns are UNIQUE) — same reasoning as signup.tsx.
+    // Most likely cause: `email` collided with another account (it's
+    // UNIQUE) — same reasoning as signup.tsx.
     return {
       intent: "update-profile" as const,
-      error: "Username or email is already taken",
+      error: "Email is already taken",
     };
   }
 
@@ -109,7 +105,10 @@ export default function Account({
 }: Route.ComponentProps) {
   return (
     <main className="min-h-screen bg-background">
-      <TopBanner username={loaderData.user.username} page="account" />
+      <TopBanner
+        displayName={loaderData.user.name ?? loaderData.user.email}
+        page="account"
+      />
       <div className="mx-auto max-w-sm space-y-8 px-4 py-12">
         <AccountForm user={loaderData.user} actionData={actionData} />
       </div>

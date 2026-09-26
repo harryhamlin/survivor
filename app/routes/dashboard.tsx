@@ -33,16 +33,12 @@ export async function loader({ request }: Route.LoaderArgs) {
   const userId = await requireUserId(request);
 
   const userResult = await pool.query(
-    "SELECT username, name, email FROM users WHERE id = $1",
+    "SELECT name, email FROM users WHERE id = $1",
     [userId],
   );
-  const userRow = userResult.rows[0] as {
-    username: string;
-    name: string | null;
-    email: string | null;
-  };
+  const userRow = userResult.rows[0] as { name: string | null; email: string };
   const player = await getOrCreateFantasyPlayer(userId, {
-    displayName: userRow.name ?? userRow.username,
+    displayName: userRow.name ?? userRow.email,
     email: userRow.email,
   });
 
@@ -219,16 +215,12 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const userResult = await pool.query(
-    "SELECT username, name, email FROM users WHERE id = $1",
+    "SELECT name, email FROM users WHERE id = $1",
     [userId],
   );
-  const userRow = userResult.rows[0] as {
-    username: string;
-    name: string | null;
-    email: string | null;
-  };
+  const userRow = userResult.rows[0] as { name: string | null; email: string };
   const player = await getOrCreateFantasyPlayer(userId, {
-    displayName: userRow.name ?? userRow.username,
+    displayName: userRow.name ?? userRow.email,
     email: userRow.email,
   });
 
@@ -400,7 +392,7 @@ export default function Dashboard({
   if (!loaderData.season) {
     return (
       <main className="min-h-screen bg-background">
-        <TopBanner username={user.username} page="dashboard" />
+        <TopBanner displayName={user.name ?? user.email} page="dashboard" />
         <div className="mx-auto max-w-2xl space-y-8 px-4 py-12">
           <p className="text-center text-primary/70">
             No active season yet — check back soon.
@@ -426,7 +418,7 @@ export default function Dashboard({
 
   return (
     <main className="min-h-screen bg-background">
-      <TopBanner username={user.username} page="dashboard" />
+      <TopBanner displayName={user.name ?? user.email} page="dashboard" />
       <div className="mx-auto max-w-2xl space-y-8 px-4 py-12">
         {hasCurrentEpisode && currentEpisodeImmunityType ? (
           <>
