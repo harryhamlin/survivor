@@ -71,7 +71,7 @@ export function ScoreOverviewModal({
           onClick={() => setOpen(true)}
           className="text-sm text-primary/70 hover:underline"
         >
-          Score overview
+          score_overview
         </button>
       </div>
 
@@ -94,7 +94,7 @@ export function ScoreOverviewModal({
                 id="score-overview-title"
                 className="text-lg font-semibold text-primary"
               >
-                Score overview
+                score_overview
               </h2>
               <button
                 type="button"

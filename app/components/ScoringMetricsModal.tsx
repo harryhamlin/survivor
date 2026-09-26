@@ -14,7 +14,7 @@ export function ScoringMetricsModal() {
           onClick={() => setOpen(true)}
           className="text-sm text-primary/70 hover:underline"
         >
-          Scoring metrics
+          rules
         </button>
       </div>
 
@@ -37,7 +37,7 @@ export function ScoringMetricsModal() {
                 id="scoring-metrics-title"
                 className="text-lg font-semibold text-primary"
               >
-                Scoring metrics
+                rules
               </h2>
               <button
                 type="button"
