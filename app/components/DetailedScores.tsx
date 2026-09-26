@@ -36,8 +36,8 @@ export function DetailedScores({
         {rows.length === 0 ? (
           <p className="text-primary/70">No players yet</p>
         ) : (
-          <div className="overflow-x-auto border border-primary/40">
-            <table className="w-full border-collapse text-sm">
+          <div className="w-fit max-w-full overflow-x-auto border border-primary/40">
+            <table className="border-collapse text-sm">
               <thead>
                 <tr>
                   <th className="sticky left-0 z-10 min-w-[180px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
@@ -49,10 +49,13 @@ export function DetailedScores({
                   <th className="min-w-[260px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
                     final 3
                   </th>
+                  {/* No min-width here (unlike the other columns) — this one
+                      is left to size itself to its longest line ("out: name"
+                      or "imm: tribe") instead of a fixed floor. */}
                   {episodeNumbers.map((episodeNumber) => (
                     <th
                       key={episodeNumber}
-                      className="min-w-[220px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary last:border-r-0"
+                      className="whitespace-nowrap border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary last:border-r-0"
                     >
                       episode {episodeNumber}
                     </th>
@@ -69,10 +72,14 @@ export function DetailedScores({
                       {row.score}
                     </td>
                     <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">
-                      {row.team.length > 0
-                        ? row.team.map((name, index) => (
-                            <span key={name}>
-                              {index > 0 && ", "}
+                      {row.team.length > 0 ? (
+                        // team is already ordered ultimate pick first (see
+                        // the leaderboard route's query), so stacking in
+                        // that order puts it on top with no extra sorting
+                        // here.
+                        <div className="space-y-0.5">
+                          {row.team.map((name) => (
+                            <div key={name}>
                               {name}
                               {name === row.ultimatePick && (
                                 <span className="text-primary/70">
@@ -80,14 +87,17 @@ export function DetailedScores({
                                   (ultimate survivor)
                                 </span>
                               )}
-                            </span>
-                          ))
-                        : "—"}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     {row.picks.map((pick, index) => (
                       <td
                         key={episodeNumbers[index]}
-                        className="border-b border-r border-primary/40 px-3 py-2 text-primary/70 last:border-r-0"
+                        className="whitespace-nowrap border-b border-r border-primary/40 px-3 py-2 text-primary/70 last:border-r-0"
                       >
                         {pick ? (
                           <>
