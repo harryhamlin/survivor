@@ -6,6 +6,7 @@ import type { Route } from "./+types/leaderboard";
 import pool from "../db.server";
 import { requireUserId } from "../session.server";
 import { getCurrentSeason } from "../season.server";
+import { getSeasonScores } from "../scoring.server";
 import { DetailedScores } from "../components/DetailedScores";
 
 export function meta({}: Route.MetaArgs) {
@@ -30,17 +31,16 @@ export async function loader({ request }: Route.LoaderArgs) {
     return { username, episodeNumbers: [], rows: [] };
   }
 
+  const scores = await getSeasonScores(season.id, season.finalistCount);
+  const scoreByPlayerId = new Map(scores.map((s) => [s.playerId, s.score]));
+
   // One row per fantasy player, with their draft's contestant names
   // pre-aggregated into an array (ultimate pick first) plus that pick called
   // out on its own — LEFT JOINed all the way through so a player with no
-  // draft yet still gets a row (empty team array, null ultimate pick, score
-  // 0). Also joins back to users for the login's `name`/`username`, used
-  // only to format the display name below. The score itself is the one
-  // documented rule (see ScoringMetricsModal): +4 per drafted contestant who
-  // reaches the season's final `finalist_count`, +4 more if the Ultimate
-  // Survivor pick specifically wins (final_placement = 1) — computed here
-  // rather than stored, since contestants.final_placement and
-  // seasons.finalist_count are exactly the data this rule needs.
+  // draft yet still gets a row (empty team array, null ultimate pick). Also
+  // joins back to users for the login's `name`/`username`, used only to
+  // format the display name below. Score itself comes from getSeasonScores
+  // above, not from this query.
   const playersResult = await pool.query(
     `SELECT
        fp.id AS player_id,
@@ -51,21 +51,13 @@ export async function loader({ request }: Route.LoaderArgs) {
            FILTER (WHERE c.name IS NOT NULL),
          ARRAY[]::text[]
        ) AS team_names,
-       MAX(c.name) FILTER (WHERE dp.is_ultimate_pick) AS ultimate_pick_name,
-       COALESCE(SUM(
-         CASE WHEN c.final_placement IS NOT NULL AND c.final_placement <= $2
-           THEN 4 ELSE 0 END
-       ), 0)
-       + COALESCE(MAX(
-           CASE WHEN dp.is_ultimate_pick AND c.final_placement = 1 THEN 4 ELSE 0 END
-         ), 0) AS score
+       MAX(c.name) FILTER (WHERE dp.is_ultimate_pick) AS ultimate_pick_name
      FROM fantasy_players fp
      JOIN users u ON u.id = fp.user_id
      LEFT JOIN draft_picks dp ON dp.player_id = fp.id AND dp.season_id = $1
      LEFT JOIN contestants c ON c.id = dp.contestant_id
-     GROUP BY fp.id, u.username, u.name
-     ORDER BY score DESC, u.username ASC`,
-    [season.id, season.finalistCount],
+     GROUP BY fp.id, u.username, u.name`,
+    [season.id],
   );
 
   // Every episode's picks, for every player, in one query — grouped into a
@@ -112,28 +104,31 @@ export async function loader({ request }: Route.LoaderArgs) {
     (row) => row.episode_number as number,
   );
 
-  const rows = playersResult.rows.map((row) => {
-    const playerId = row.player_id as number;
-    const picksByEpisode = picksByPlayerId.get(playerId);
-    const playerUsername = row.username as string;
-    const name = row.name as string | null;
-    // Just the first name, so "Jane Doe" displays as "Jane (jdoe)" rather
-    // than the full name — falls back to the username alone for accounts
-    // with no name set (e.g. seeded before the signup form required one).
-    const firstName = name?.trim().split(/\s+/)[0];
-    return {
-      playerId,
-      displayName: firstName
-        ? `${firstName} (${playerUsername})`
-        : playerUsername,
-      score: Number(row.score),
-      team: row.team_names as string[],
-      ultimatePick: row.ultimate_pick_name as string | null,
-      picks: episodeNumbers.map(
-        (episodeNumber) => picksByEpisode?.get(episodeNumber) ?? null,
-      ),
-    };
-  });
+  const rows = playersResult.rows
+    .map((row) => {
+      const playerId = row.player_id as number;
+      const picksByEpisode = picksByPlayerId.get(playerId);
+      const playerUsername = row.username as string;
+      const name = row.name as string | null;
+      // Just the first name, so "Jane Doe" displays as "Jane (jdoe)" rather
+      // than the full name — falls back to the username alone for accounts
+      // with no name set (e.g. seeded before the signup form required one).
+      const firstName = name?.trim().split(/\s+/)[0];
+      return {
+        playerId,
+        username: playerUsername,
+        displayName: firstName
+          ? `${firstName} (${playerUsername})`
+          : playerUsername,
+        score: scoreByPlayerId.get(playerId) ?? 0,
+        team: row.team_names as string[],
+        ultimatePick: row.ultimate_pick_name as string | null,
+        picks: episodeNumbers.map(
+          (episodeNumber) => picksByEpisode?.get(episodeNumber) ?? null,
+        ),
+      };
+    })
+    .sort((a, b) => b.score - a.score || a.username.localeCompare(b.username));
 
   return { username, episodeNumbers, rows };
 }
