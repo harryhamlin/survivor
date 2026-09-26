@@ -27,16 +27,19 @@ export async function loader({ request }: Route.LoaderArgs) {
   const scoreByPlayerId = new Map(scores.map((s) => [s.playerId, s.score]));
 
   const playersResult = await pool.query(
-    `SELECT fp.id AS player_id, u.username
+    `SELECT fp.id AS player_id, u.name, u.email
      FROM fantasy_players fp
      JOIN users u ON u.id = fp.user_id`,
   );
   const standings = playersResult.rows
     .map((row) => ({
-      username: row.username as string,
+      playerId: row.player_id as number,
+      // Shows their name, not their email, on this public page — falls
+      // back to email only for a legacy/seeded account with no name set.
+      name: (row.name as string | null) ?? (row.email as string),
       score: scoreByPlayerId.get(row.player_id as number) ?? 0,
     }))
-    .sort((a, b) => b.score - a.score || a.username.localeCompare(b.username));
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 
   return { standings, isLoggedIn: userId !== null };
 }

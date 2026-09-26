@@ -13,21 +13,21 @@ const pool = new pg.Pool({
 });
 
 // Accounts to ensure exist. Add more entries here for additional test users.
-const users = [{ username: "test", password: "test" }];
+const users = [{ email: "test@example.com", name: "Test User", password: "test" }];
 
-for (const { username, password } of users) {
+for (const { email, name, password } of users) {
   // Always hash — never store a plaintext password, even for a throwaway
   // test account.
   const passwordHash = await bcrypt.hash(password, 10);
   // Upsert: creates the user if it doesn't exist yet, or just refreshes the
   // password hash if it does, so this script is safe to run more than once.
   await pool.query(
-    `INSERT INTO users (username, password_hash)
-     VALUES ($1, $2)
-     ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
-    [username, passwordHash],
+    `INSERT INTO users (email, name, password_hash)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
+    [email, name, passwordHash],
   );
-  console.log(`Seeded user: ${username}`);
+  console.log(`Seeded user: ${email}`);
 }
 
 await pool.end();

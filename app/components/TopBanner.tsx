@@ -15,17 +15,19 @@ const NAV_LINKS = [
 ] as const;
 
 export function TopBanner({
-  username,
+  displayName,
   page,
 }: {
-  username: string;
+  // The account's name — or, for a legacy/seeded account with no name set,
+  // whatever the caller falls back to (e.g. their email).
+  displayName: string;
   // Which page is currently showing this banner — that page's own nav link
   // is left out, so it never just links to the page you're already on.
   page: (typeof NAV_LINKS)[number]["page"];
 }) {
   return (
     <div className="flex w-full items-center justify-between border-b border-primary/40 px-4 py-4">
-      <p className="text-lg font-semibold text-primary">{username}</p>
+      <p className="text-lg font-semibold text-primary">{displayName}</p>
       <div className="flex items-center gap-4">
         {NAV_LINKS.filter((link) => link.page !== page).map((link) => (
           <Link

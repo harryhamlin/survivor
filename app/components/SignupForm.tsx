@@ -49,22 +49,6 @@ export function SignupForm({ error }: { error?: string }) {
             </div>
             <div className="space-y-1">
               <label
-                htmlFor="username"
-                className="block text-sm font-medium text-primary"
-              >
-                Username
-              </label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
-                required
-                className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-            <div className="space-y-1">
-              <label
                 htmlFor="password"
                 className="block text-sm font-medium text-primary"
               >
@@ -80,8 +64,8 @@ export function SignupForm({ error }: { error?: string }) {
                 className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
-            {/* Set by the route's action when signup fails (e.g. username or
-                email already taken). */}
+            {/* Set by the route's action when signup fails (e.g. that email
+                is already taken). */}
             {error && <p className="text-sm text-red-500">{error}</p>}
             <button
               type="submit"

@@ -21,14 +21,15 @@ export async function loader({ request }: Route.LoaderArgs) {
   // requiring someone to be logged in and greeting them in the top banner.
   const userId = await requireUserId(request);
   const userResult = await pool.query(
-    "SELECT username FROM users WHERE id = $1",
+    "SELECT name, email FROM users WHERE id = $1",
     [userId],
   );
-  const username = userResult.rows[0].username as string;
+  const userRow = userResult.rows[0] as { name: string | null; email: string };
+  const displayName = userRow.name ?? userRow.email;
 
   const season = await getCurrentSeason();
   if (!season) {
-    return { username, episodeNumbers: [], rows: [] };
+    return { displayName, episodeNumbers: [], rows: [] };
   }
 
   const scores = await getSeasonScores(season.id, season.finalistCount);
@@ -38,13 +39,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   // pre-aggregated into an array (ultimate pick first) plus that pick called
   // out on its own — LEFT JOINed all the way through so a player with no
   // draft yet still gets a row (empty team array, null ultimate pick). Also
-  // joins back to users for the login's `name`/`username`, used only to
-  // format the display name below. Score itself comes from getSeasonScores
-  // above, not from this query.
+  // joins back to users for `name`/`email`, used only to format the display
+  // name below. Score itself comes from getSeasonScores above, not from
+  // this query.
   const playersResult = await pool.query(
     `SELECT
        fp.id AS player_id,
-       u.username,
+       u.email,
        u.name,
        COALESCE(
          array_agg(c.name ORDER BY dp.is_ultimate_pick DESC, c.name)
@@ -56,7 +57,7 @@ export async function loader({ request }: Route.LoaderArgs) {
      JOIN users u ON u.id = fp.user_id
      LEFT JOIN draft_picks dp ON dp.player_id = fp.id AND dp.season_id = $1
      LEFT JOIN contestants c ON c.id = dp.contestant_id
-     GROUP BY fp.id, u.username, u.name`,
+     GROUP BY fp.id, u.email, u.name`,
     [season.id],
   );
 
@@ -108,18 +109,13 @@ export async function loader({ request }: Route.LoaderArgs) {
     .map((row) => {
       const playerId = row.player_id as number;
       const picksByEpisode = picksByPlayerId.get(playerId);
-      const playerUsername = row.username as string;
-      const name = row.name as string | null;
-      // Just the first name, so "Jane Doe" displays as "Jane (jdoe)" rather
-      // than the full name — falls back to the username alone for accounts
-      // with no name set (e.g. seeded before the signup form required one).
-      const firstName = name?.trim().split(/\s+/)[0];
+      // Falls back to the email for a legacy/seeded account with no name
+      // set — there's no more username to fall back to instead.
+      const rowDisplayName =
+        (row.name as string | null) ?? (row.email as string);
       return {
         playerId,
-        username: playerUsername,
-        displayName: firstName
-          ? `${firstName} (${playerUsername})`
-          : playerUsername,
+        displayName: rowDisplayName,
         score: scoreByPlayerId.get(playerId) ?? 0,
         team: row.team_names as string[],
         ultimatePick: row.ultimate_pick_name as string | null,
@@ -128,15 +124,17 @@ export async function loader({ request }: Route.LoaderArgs) {
         ),
       };
     })
-    .sort((a, b) => b.score - a.score || a.username.localeCompare(b.username));
+    .sort(
+      (a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName),
+    );
 
-  return { username, episodeNumbers, rows };
+  return { displayName, episodeNumbers, rows };
 }
 
 export default function Leaderboard({ loaderData }: Route.ComponentProps) {
   return (
     <DetailedScores
-      username={loaderData.username}
+      displayName={loaderData.displayName}
       episodeNumbers={loaderData.episodeNumbers}
       rows={loaderData.rows}
     />

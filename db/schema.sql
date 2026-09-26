@@ -5,15 +5,14 @@
 -- convention is to drop a table by hand and let this file recreate it from
 -- scratch rather than writing ALTER statements to migrate its old shape.
 
--- Login accounts. One row per person who can sign in. Kept separate from
--- fantasy_players (below) so "who can log in" and "who's playing the game"
--- are two different concerns — a login never needs game data, and a player
--- row is meaningless without one.
+-- Login accounts. One row per person who can sign in — by email, not a
+-- separate username. Kept separate from fantasy_players (below) so "who can
+-- log in" and "who's playing the game" are two different concerns — a
+-- login never needs game data, and a player row is meaningless without one.
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
-  username TEXT UNIQUE NOT NULL,
+  email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL, -- bcrypt hash, never a plaintext password
-  email TEXT UNIQUE,
   name TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

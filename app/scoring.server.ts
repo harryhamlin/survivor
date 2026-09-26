@@ -1,8 +1,8 @@
 // The app's one scoring rule, computed live from the database rather than
 // stored — see ScoringMetricsModal for how it's presented to players. Both
 // "/" (home.tsx) and "/leaderboard" (leaderboard.tsx) need a player's score
-// but query different additional data alongside it (a bare username vs. a
-// full roster + pick history), so this only computes the score itself;
+// but query different additional data alongside it (a bare name vs. a full
+// roster + pick history), so this only computes the score itself;
 // callers join it against whatever else they need by player id.
 //
 // The rule itself is plain JS rather than a SQL aggregate — a couple of

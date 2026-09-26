@@ -12,17 +12,17 @@ export function meta({}: Route.MetaArgs) {
 }
 
 // Runs on POST (i.e. when the login form is submitted). Looks up the
-// submitted username, compares the submitted password against the stored
+// submitted email, compares the submitted password against the stored
 // bcrypt hash, and either returns an error (re-rendering the form with a
 // message) or starts a session and redirects to the landing page.
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
-  const username = String(formData.get("username") ?? "");
+  const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
 
   const result = await pool.query(
-    "SELECT id, password_hash FROM users WHERE username = $1",
-    [username],
+    "SELECT id, password_hash FROM users WHERE email = $1",
+    [email],
   );
 
   const user = result.rows[0] as
@@ -30,12 +30,12 @@ export async function action({ request }: Route.ActionArgs) {
     | undefined;
   // bcrypt.compare still needs to run even when there's no matching user, in
   // a real implementation you'd compare against a dummy hash to avoid timing
-  // differences revealing whether a username exists; kept simple here since
+  // differences revealing whether an account exists; kept simple here since
   // this is a small personal app, not a public-facing service.
   const valid = user ? await bcrypt.compare(password, user.password_hash) : false;
 
   if (!valid || !user) {
-    return { error: "Invalid username or password" };
+    return { error: "Invalid email or password" };
   }
 
   return createUserSession(user.id, "/");
