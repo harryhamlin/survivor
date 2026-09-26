@@ -8,6 +8,9 @@ type Contestant = {
   name: string;
   tribeColor: string | null;
   eliminated: boolean;
+  idols: boolean;
+  advantages: string | null;
+  shotInTheDark: boolean;
 };
 
 const ELIMINATED_COLOR = "#ff0000";
@@ -41,6 +44,18 @@ export function ContestantsGrid({
               const borderColor = contestant.eliminated
                 ? ELIMINATED_COLOR
                 : (contestant.tribeColor ?? NO_TRIBE_COLOR);
+              // Only shown for contestants still in the game. Each line
+              // appears only when there's something to say: an idol or
+              // advantage held, or a shot in the dark already spent — not
+              // when they hold no idol/advantage, or still have their shot
+              // in the dark unused.
+              const statusLines = contestant.eliminated
+                ? []
+                : [
+                    contestant.idols ? "idol" : null,
+                    contestant.advantages,
+                    contestant.shotInTheDark ? null : "shot in the dark: used",
+                  ].filter((line): line is string => Boolean(line));
               return (
                 <div key={contestant.id} className="space-y-2">
                   <div
@@ -75,6 +90,11 @@ export function ContestantsGrid({
                           strokeWidth="2"
                         />
                       </svg>
+                    )}
+                    {statusLines.length > 0 && (
+                      <div className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-0.5 text-center text-[10px] leading-tight text-white">
+                        {statusLines.join(" · ")}
+                      </div>
                     )}
                   </div>
                   <p className="text-center text-sm text-primary">

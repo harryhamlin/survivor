@@ -44,6 +44,9 @@ export async function loader({ request }: Route.LoaderArgs) {
        c.id,
        c.name,
        t.color AS tribe_color,
+       c.idols,
+       c.advantages,
+       c.shot_in_the_dark,
        EXISTS (
          SELECT 1 FROM episode_eliminations ee WHERE ee.contestant_id = c.id
        ) AS eliminated
@@ -58,6 +61,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     name: row.name as string,
     tribeColor: row.tribe_color as string | null,
     eliminated: row.eliminated as boolean,
+    idols: row.idols as boolean,
+    advantages: row.advantages as string | null,
+    shotInTheDark: row.shot_in_the_dark as boolean,
   }));
 
   return { displayName, contestants };
