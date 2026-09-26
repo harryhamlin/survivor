@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { page: "dashboard", to: "/dashboard", label: "dashboard" },
   { page: "leaderboard", to: "/leaderboard", label: "leaderboard" },
   { page: "season-results", to: "/season-results", label: "game_results" },
+  { page: "contestants", to: "/contestants", label: "contestants" },
   { page: "account", to: "/account", label: "account" },
 ] as const;
 

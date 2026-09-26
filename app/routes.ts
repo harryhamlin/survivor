@@ -22,6 +22,7 @@ export default [
   // won immunity, episode by episode) — distinct from "/leaderboard", which
   // is about fantasy players' predictions and scores.
   route("season-results", "routes/season-results.tsx"),
+  route("contestants", "routes/contestants.tsx"),
   route("account", "routes/account.tsx"),
   route("logout", "routes/logout.tsx"),
 ] satisfies RouteConfig;
