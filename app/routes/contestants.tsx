@@ -6,6 +6,7 @@ import type { Route } from "./+types/contestants";
 import pool from "../db.server";
 import { requireUserId } from "../session.server";
 import { getCurrentSeason } from "../season.server";
+import { getHeadshotUrl } from "../headshots.server";
 import { ContestantsGrid } from "../components/ContestantsGrid";
 
 export function meta({}: Route.MetaArgs) {
@@ -64,6 +65,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     idols: row.idols as boolean,
     advantages: row.advantages as string | null,
     shotInTheDark: row.shot_in_the_dark as boolean,
+    headshotUrl: getHeadshotUrl(row.name as string),
   }));
 
   return { displayName, contestants };

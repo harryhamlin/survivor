@@ -11,6 +11,7 @@ type Contestant = {
   idols: boolean;
   advantages: string | null;
   shotInTheDark: boolean;
+  headshotUrl: string | null;
 };
 
 const ELIMINATED_COLOR = "#ff0000";
@@ -62,10 +63,18 @@ export function ContestantsGrid({
                     className="relative aspect-square border-4 bg-primary/5"
                     style={{ borderColor }}
                   >
-                    {/* Placeholder box until real headshots are added. */}
-                    <div className="flex h-full w-full items-center justify-center text-xs text-primary/30">
-                      photo
-                    </div>
+                    {contestant.headshotUrl ? (
+                      <img
+                        src={contestant.headshotUrl}
+                        alt={contestant.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      // Placeholder box for anyone missing a headshot file.
+                      <div className="flex h-full w-full items-center justify-center text-xs text-primary/30">
+                        photo
+                      </div>
+                    )}
                     {contestant.eliminated && (
                       <svg
                         className="pointer-events-none absolute inset-0 h-full w-full"
