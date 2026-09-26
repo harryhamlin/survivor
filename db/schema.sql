@@ -39,13 +39,21 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 -- contestants count as "reaching the end" for scoring purposes (see
 -- ScoringMetricsModal) — it's also how many contestants a fantasy player
 -- must draft (see draft_picks below), since those are the same number by
--- design: you're drafting your guess at who reaches the end.
+-- design: you're drafting your guess at who reaches the end. `draft_lock_at`
+-- is its own column (rather than piggybacking on some episode's
+-- picks_lock_at, as an earlier version of this schema did) because the
+-- first episode a season's fantasy game actually plays isn't necessarily
+-- episode_number 1 — e.g. a season can start already a week in, with that
+-- first week's boot recorded (so the contestant can't be drafted) but no
+-- weekly picks ever collected for it. Nullable: null means the draft has no
+-- lock yet and is treated as open (see isLocked in app/season.server.ts).
 CREATE TABLE IF NOT EXISTS seasons (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'upcoming'
     CHECK (status IN ('upcoming', 'active', 'complete')),
-  finalist_count INTEGER NOT NULL DEFAULT 3
+  finalist_count INTEGER NOT NULL DEFAULT 3,
+  draft_lock_at TIMESTAMPTZ
 );
 
 -- A fantasy player's game identity, separate from their login (users).
@@ -95,10 +103,11 @@ CREATE TABLE IF NOT EXISTS contestants (
 -- One row per episode of a season. `picks_lock_at` is a real stored instant
 -- (rather than a computed/hardcoded deadline in app code) — the backend
 -- just compares `now()` against it (see app/season.server.ts), so changing
--- an air date or lock time is a data edit, not a code change. The draft
--- itself locks at episode 1's picks_lock_at (there's no separate draft-lock
--- column). `status` tracks an episode through the pipeline the backend
--- drives it through: airs, then its result gets recorded and scored.
+-- an air date or lock time is a data edit, not a code change. (The draft
+-- itself locks separately, at seasons.draft_lock_at — not necessarily tied
+-- to any one episode's picks_lock_at.) `status` tracks an episode through
+-- the pipeline the backend drives it through: airs, then its result gets
+-- recorded and scored.
 -- `immunity_type` is which kind of immunity this episode plays for —
 -- pre-merge episodes are usually tribe immunity, post-merge ones individual
 -- — and is what tells the backend whether to collect (and later grade) a
@@ -201,6 +210,8 @@ DO $$
 DECLARE
   current_season_id INTEGER;
 BEGIN
+  -- draft_lock_at is left null (draft treated as open) until it's set by
+  -- hand — there's no way to derive a sensible default for it here.
   IF NOT EXISTS (SELECT 1 FROM seasons) THEN
     INSERT INTO seasons (name, status, finalist_count)
     VALUES ('Survivor 51', 'active', 3);
@@ -239,9 +250,8 @@ BEGIN
       (current_season_id, 'Deven');
   END IF;
 
-  -- Episode 1's picks_lock_at is also the draft lock (see the comment on
-  -- the episodes table) — carried over from the previous hardcoded
-  -- TEAM_LOCK_DEADLINE: 8:00 PM Pacific on September 30, 2026.
+  -- A placeholder first episode, an example of the shape the real data
+  -- takes — edit or replace this by hand once the actual schedule is known.
   IF NOT EXISTS (SELECT 1 FROM episodes) THEN
     INSERT INTO episodes (season_id, episode_number, air_date, picks_lock_at)
     VALUES (

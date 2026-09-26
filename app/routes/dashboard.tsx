@@ -9,9 +9,9 @@ import { getOrCreateFantasyPlayer } from "../players.server";
 import {
   getCurrentSeason,
   getCurrentEpisode,
-  getDraftLockAt,
   isLocked,
   formatPacific,
+  type Season,
 } from "../season.server";
 import { TopBanner } from "../components/TopBanner";
 import { TeamSection } from "../components/TeamSection";
@@ -126,7 +126,6 @@ export async function loader({ request }: Route.LoaderArgs) {
     color: string;
   }[];
 
-  const draftLockAt = await getDraftLockAt(season.id);
   const currentEpisode = await getCurrentEpisode(season.id);
 
   // This episode's predictions, if the player has already made them (null
@@ -191,8 +190,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     weeklyPicks,
     hasCurrentEpisode: currentEpisode !== null,
     currentEpisodeImmunityType: currentEpisode?.immunityType ?? null,
-    isDraftLocked: isLocked(draftLockAt),
-    draftLockLabel: draftLockAt ? formatPacific(draftLockAt) : null,
+    isDraftLocked: isLocked(season.draftLockAt),
+    draftLockLabel: season.draftLockAt ? formatPacific(season.draftLockAt) : null,
     weeklyPicksLockLabel: currentEpisode
       ? formatPacific(currentEpisode.picksLockAt)
       : null,
@@ -227,7 +226,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "weekly-picks") {
     return weeklyPicksAction(player.id, season.id, formData);
   }
-  return createOrUpdateDraftAction(player.id, season.id, formData);
+  return createOrUpdateDraftAction(player.id, season, formData);
 }
 
 // Creates the player's draft the first time, or replaces it if they already
@@ -239,22 +238,18 @@ export async function action({ request }: Route.ActionArgs) {
 // passes.
 async function createOrUpdateDraftAction(
   playerId: number,
-  seasonId: number,
+  season: Season,
   formData: FormData,
 ) {
-  const draftLockAt = await getDraftLockAt(seasonId);
-  if (isLocked(draftLockAt)) {
+  if (isLocked(season.draftLockAt)) {
     return {
       intent: "create-team" as const,
       error: "The draft is locked and can no longer be changed",
     };
   }
 
-  const {
-    rows: [{ finalist_count: finalistCount }],
-  } = await pool.query("SELECT finalist_count FROM seasons WHERE id = $1", [
-    seasonId,
-  ]);
+  const seasonId = season.id;
+  const finalistCount = season.finalistCount;
 
   // `getAll` returns every checked checkbox's value; wrapping in a Set drops
   // any accidental duplicates before we validate the count.

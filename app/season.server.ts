@@ -10,6 +10,10 @@ export type Season = {
   name: string;
   status: string;
   finalistCount: number;
+  // Null means the draft has no lock yet and is treated as open (see
+  // isLocked below) — not necessarily tied to any one episode's
+  // picks_lock_at (see the comment on seasons in db/schema.sql).
+  draftLockAt: Date | null;
 };
 
 export type Episode = {
@@ -24,7 +28,7 @@ export type Episode = {
 // the app still has something to show between seasons.
 export async function getCurrentSeason(): Promise<Season | null> {
   const { rows } = await pool.query(
-    `SELECT id, name, status, finalist_count FROM seasons
+    `SELECT id, name, status, finalist_count, draft_lock_at FROM seasons
      ORDER BY (status = 'active') DESC, id DESC
      LIMIT 1`,
   );
@@ -35,19 +39,8 @@ export async function getCurrentSeason(): Promise<Season | null> {
     name: row.name as string,
     status: row.status as string,
     finalistCount: row.finalist_count as number,
+    draftLockAt: row.draft_lock_at as Date | null,
   };
-}
-
-// The draft locks at the season's first episode's picks_lock_at. Null if
-// that episode hasn't been entered yet, in which case the draft is treated
-// as open (see isLocked below).
-export async function getDraftLockAt(seasonId: number): Promise<Date | null> {
-  const { rows } = await pool.query(
-    `SELECT picks_lock_at FROM episodes
-     WHERE season_id = $1 AND episode_number = 1`,
-    [seasonId],
-  );
-  return rows[0]?.picks_lock_at ?? null;
 }
 
 // The next episode whose picks haven't locked yet — the one the weekly
