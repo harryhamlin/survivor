@@ -1,25 +1,29 @@
-// The episode's two predictions: who gets voted out, and which tribe wins
-// immunity. Mirrors TeamSection's pattern — a prominent button before any
-// picks exist, a standalone read-only box with an "edit weekly picks" link
-// once they do — with the actual form living in a modal either way. Submits
-// to the dashboard route's action (see the `intent` field) rather than
-// having a page of its own.
+// The episode's two predictions: who gets voted out, and who (or which
+// tribe) wins immunity — which one depends on this episode's immunityType
+// (pre-merge tribe immunity vs. post-merge individual immunity). Mirrors
+// TeamSection's pattern — a prominent button before any picks exist, a
+// standalone read-only box with an "edit weekly picks" link once they do —
+// with the actual form living in a modal either way. Submits to the
+// dashboard route's action (see the `intent` field) rather than having a
+// page of its own.
 import { useState } from "react";
 import { Form } from "react-router";
 
 export function WeeklyPicksModal({
   contestants,
   tribes,
+  immunityType,
   currentPicks,
   error,
 }: {
   contestants: { id: number; name: string }[];
   tribes: { id: number; name: string; color: string }[];
+  immunityType: "tribe" | "individual";
   currentPicks: {
     eliminationPickId: number;
     eliminationPickName: string;
-    immunityTribePickId: number;
-    immunityTribePickName: string;
+    immunityPickId: number;
+    immunityPickName: string;
   } | null;
   error?: string;
 }) {
@@ -29,11 +33,15 @@ export function WeeklyPicksModal({
   const [eliminationPickId, setEliminationPickId] = useState<number | "">(
     currentPicks?.eliminationPickId ?? "",
   );
-  const [immunityTribePickId, setImmunityTribePickId] = useState<number | "">(
-    currentPicks?.immunityTribePickId ?? "",
+  // One field regardless of immunityType — it's submitted as
+  // `immunityPickId` either way, and the dashboard action is what decides
+  // whether that id means a tribe or a contestant (see
+  // episodes.immunity_type in db/schema.sql).
+  const [immunityPickId, setImmunityPickId] = useState<number | "">(
+    currentPicks?.immunityPickId ?? "",
   );
 
-  const canSubmit = eliminationPickId !== "" && immunityTribePickId !== "";
+  const canSubmit = eliminationPickId !== "" && immunityPickId !== "";
 
   return (
     <div className="space-y-4">
@@ -46,7 +54,7 @@ export function WeeklyPicksModal({
                 voted out: {currentPicks.eliminationPickName}
               </p>
               <p className="text-primary">
-                immunity: {currentPicks.immunityTribePickName}
+                immunity: {currentPicks.immunityPickName}
               </p>
             </div>
             <button
@@ -129,33 +137,63 @@ export function WeeklyPicksModal({
                   ))}
                 </select>
               </div>
-              <div className="space-y-1">
-                <span className="block text-sm text-primary/70">
-                  which tribe will win immunity?
-                </span>
-                <input
-                  type="hidden"
-                  name="immunityTribePickId"
-                  value={immunityTribePickId}
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  {tribes.map((tribe) => (
-                    <button
-                      key={tribe.id}
-                      type="button"
-                      onClick={() => setImmunityTribePickId(tribe.id)}
-                      aria-pressed={immunityTribePickId === tribe.id}
-                      className={`border px-3 py-2 ${
-                        immunityTribePickId === tribe.id
-                          ? "border-primary bg-primary text-black"
-                          : "border-primary/40 text-primary hover:border-primary"
-                      }`}
-                    >
-                      {tribe.name}
-                    </button>
-                  ))}
+              {immunityType === "tribe" ? (
+                <div className="space-y-1">
+                  <span className="block text-sm text-primary/70">
+                    which tribe will win immunity?
+                  </span>
+                  <input
+                    type="hidden"
+                    name="immunityPickId"
+                    value={immunityPickId}
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    {tribes.map((tribe) => (
+                      <button
+                        key={tribe.id}
+                        type="button"
+                        onClick={() => setImmunityPickId(tribe.id)}
+                        aria-pressed={immunityPickId === tribe.id}
+                        className={`border px-3 py-2 ${
+                          immunityPickId === tribe.id
+                            ? "border-primary bg-primary text-black"
+                            : "border-primary/40 text-primary hover:border-primary"
+                        }`}
+                      >
+                        {tribe.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-1">
+                  <label
+                    htmlFor="immunityPickId"
+                    className="block text-sm text-primary/70"
+                  >
+                    who will win individual immunity?
+                  </label>
+                  <select
+                    id="immunityPickId"
+                    name="immunityPickId"
+                    required
+                    value={immunityPickId}
+                    onChange={(event) =>
+                      setImmunityPickId(Number(event.target.value))
+                    }
+                    className="w-full border border-primary/40 bg-background px-3 py-2 text-primary"
+                  >
+                    <option value="" disabled>
+                      select a contestant
+                    </option>
+                    {contestants.map((contestant) => (
+                      <option key={contestant.id} value={contestant.id}>
+                        {contestant.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {/* Set by the dashboard action if the save failed server-side. */}
               {error && <p className="text-sm text-red-500">{error}</p>}
               <button

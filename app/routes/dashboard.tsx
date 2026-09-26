@@ -135,14 +135,17 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   // This episode's predictions, if the player has already made them (null
   // until their first submission for this episode, or if every episode has
-  // already locked). The eliminated contestant's and tribe's names are
+  // already locked). The eliminated contestant's name, and whichever of
+  // tribe/contestant immunity pick applies (see episodes.immunity_type), are
   // joined in directly here so the display box stays correct even if their
-  // state changes after the pick was made.
+  // state changes after the pick was made. The immunity joins are LEFT
+  // JOINs since only one of immunity_tribe_pick_id/immunity_contestant_pick_id
+  // is ever set on a given row.
   let weeklyPicks: {
     eliminationPickId: number;
     eliminationPickName: string;
-    immunityTribePickId: number;
-    immunityTribePickName: string;
+    immunityPickId: number;
+    immunityPickName: string;
   } | null = null;
   if (currentEpisode) {
     const weeklyPicksResult = await pool.query(
@@ -150,10 +153,13 @@ export async function loader({ request }: Route.LoaderArgs) {
          wp.elimination_pick_id,
          c.name AS elimination_pick_name,
          wp.immunity_tribe_pick_id,
-         t.name AS immunity_tribe_pick_name
+         t.name AS immunity_tribe_pick_name,
+         wp.immunity_contestant_pick_id,
+         ic.name AS immunity_contestant_pick_name
        FROM weekly_picks wp
        JOIN contestants c ON c.id = wp.elimination_pick_id
-       JOIN tribes t ON t.id = wp.immunity_tribe_pick_id
+       LEFT JOIN tribes t ON t.id = wp.immunity_tribe_pick_id
+       LEFT JOIN contestants ic ON ic.id = wp.immunity_contestant_pick_id
        WHERE wp.episode_id = $1 AND wp.player_id = $2`,
       [currentEpisode.id, player.id],
     );
@@ -161,16 +167,20 @@ export async function loader({ request }: Route.LoaderArgs) {
       | {
           elimination_pick_id: number;
           elimination_pick_name: string;
-          immunity_tribe_pick_id: number;
-          immunity_tribe_pick_name: string;
+          immunity_tribe_pick_id: number | null;
+          immunity_tribe_pick_name: string | null;
+          immunity_contestant_pick_id: number | null;
+          immunity_contestant_pick_name: string | null;
         }
       | undefined;
     weeklyPicks = row
       ? {
           eliminationPickId: row.elimination_pick_id,
           eliminationPickName: row.elimination_pick_name,
-          immunityTribePickId: row.immunity_tribe_pick_id,
-          immunityTribePickName: row.immunity_tribe_pick_name,
+          immunityPickId: (row.immunity_tribe_pick_id ??
+            row.immunity_contestant_pick_id) as number,
+          immunityPickName: (row.immunity_tribe_pick_name ??
+            row.immunity_contestant_pick_name) as string,
         }
       : null;
   }
@@ -184,6 +194,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     tribes,
     weeklyPicks,
     hasCurrentEpisode: currentEpisode !== null,
+    currentEpisodeImmunityType: currentEpisode?.immunityType ?? null,
     isDraftLocked: isLocked(draftLockAt),
     draftLockLabel: draftLockAt ? formatPacific(draftLockAt) : null,
     weeklyPicksLockLabel: currentEpisode
@@ -311,10 +322,10 @@ async function createOrUpdateDraftAction(
   return redirect("/dashboard");
 }
 
-// Saves (or updates) the player's prediction for who gets voted out and
-// which tribe wins immunity, for whichever episode is currently open for
-// picks. Upserted on (episode_id, player_id) — editing this episode's picks
-// again overwrites them, but past episodes stay untouched, so history
+// Saves (or updates) the player's prediction for who gets voted out and who
+// (or which tribe) wins immunity, for whichever episode is currently open
+// for picks. Upserted on (episode_id, player_id) — editing this episode's
+// picks again overwrites them, but past episodes stay untouched, so history
 // builds up for the /leaderboard page.
 async function weeklyPicksAction(
   playerId: number,
@@ -330,27 +341,42 @@ async function weeklyPicksAction(
   }
 
   const eliminationPickId = Number(formData.get("eliminationPickId"));
-  const immunityTribePickId = Number(formData.get("immunityTribePickId"));
+  const immunityPickId = Number(formData.get("immunityPickId"));
 
   if (
     !Number.isInteger(eliminationPickId) ||
-    !Number.isInteger(immunityTribePickId)
+    !Number.isInteger(immunityPickId)
   ) {
     return {
       intent: "weekly-picks" as const,
-      error: "Pick a contestant and an immunity tribe",
+      error: "Pick a contestant and an immunity winner",
     };
   }
 
+  // Which column the submitted immunityPickId actually goes into depends on
+  // this episode's immunity_type — exactly one of the two is set, the other
+  // stays null (see the comment on weekly_picks in db/schema.sql).
+  const isTribeImmunity = currentEpisode.immunityType === "tribe";
+
   try {
     await pool.query(
-      `INSERT INTO weekly_picks (episode_id, player_id, elimination_pick_id, immunity_tribe_pick_id)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO weekly_picks (
+         episode_id, player_id, elimination_pick_id,
+         immunity_tribe_pick_id, immunity_contestant_pick_id
+       )
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (episode_id, player_id) DO UPDATE SET
          elimination_pick_id = EXCLUDED.elimination_pick_id,
          immunity_tribe_pick_id = EXCLUDED.immunity_tribe_pick_id,
+         immunity_contestant_pick_id = EXCLUDED.immunity_contestant_pick_id,
          submitted_at = now()`,
-      [currentEpisode.id, playerId, eliminationPickId, immunityTribePickId],
+      [
+        currentEpisode.id,
+        playerId,
+        eliminationPickId,
+        isTribeImmunity ? immunityPickId : null,
+        isTribeImmunity ? null : immunityPickId,
+      ],
     );
   } catch {
     return {
@@ -391,6 +417,7 @@ export default function Dashboard({
     tribes,
     weeklyPicks,
     hasCurrentEpisode,
+    currentEpisodeImmunityType,
     isDraftLocked,
     draftLockLabel,
     weeklyPicksLockLabel,
@@ -401,12 +428,13 @@ export default function Dashboard({
     <main className="min-h-screen bg-background">
       <TopBanner username={user.username} page="dashboard" />
       <div className="mx-auto max-w-2xl space-y-8 px-4 py-12">
-        {hasCurrentEpisode ? (
+        {hasCurrentEpisode && currentEpisodeImmunityType ? (
           <>
             <WeeklyPicksModal
               key={JSON.stringify(weeklyPicks)}
               contestants={activeContestants}
               tribes={tribes}
+              immunityType={currentEpisodeImmunityType}
               currentPicks={weeklyPicks}
               error={
                 actionData?.intent === "weekly-picks"

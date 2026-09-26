@@ -70,16 +70,20 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   // Every episode's picks, for every player, in one query — grouped into a
   // per-player map below rather than queried once per player per episode.
+  // The two immunity joins are LEFT JOINs (and their names COALESCEd into
+  // one) since only one of immunity_tribe_pick_id/immunity_contestant_pick_id
+  // is ever set on a given row, depending on that episode's immunity_type.
   const picksResult = await pool.query(
     `SELECT
        wp.player_id,
        e.episode_number,
        c.name AS elimination_pick_name,
-       t.name AS immunity_tribe_pick_name
+       COALESCE(t.name, ic.name) AS immunity_pick_name
      FROM weekly_picks wp
      JOIN episodes e ON e.id = wp.episode_id
      JOIN contestants c ON c.id = wp.elimination_pick_id
-     JOIN tribes t ON t.id = wp.immunity_tribe_pick_id
+     LEFT JOIN tribes t ON t.id = wp.immunity_tribe_pick_id
+     LEFT JOIN contestants ic ON ic.id = wp.immunity_contestant_pick_id
      WHERE e.season_id = $1
      ORDER BY wp.player_id ASC, e.episode_number ASC`,
     [season.id],
@@ -87,7 +91,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const picksByPlayerId = new Map<
     number,
-    Map<number, { eliminationPickName: string; immunityTribePickName: string }>
+    Map<number, { eliminationPickName: string; immunityPickName: string }>
   >();
   for (const row of picksResult.rows) {
     const playerId = row.player_id as number;
@@ -96,7 +100,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     }
     picksByPlayerId.get(playerId)!.set(row.episode_number as number, {
       eliminationPickName: row.elimination_pick_name as string,
-      immunityTribePickName: row.immunity_tribe_pick_name as string,
+      immunityPickName: row.immunity_pick_name as string,
     });
   }
 

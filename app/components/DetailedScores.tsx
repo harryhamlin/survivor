@@ -8,7 +8,7 @@ import { TopBanner } from "./TopBanner";
 
 type Pick = {
   eliminationPickName: string;
-  immunityTribePickName: string;
+  immunityPickName: string;
 } | null;
 
 export function DetailedScores({
@@ -103,7 +103,7 @@ export function DetailedScores({
                           <>
                             out: {pick.eliminationPickName}
                             <br />
-                            imm: {pick.immunityTribePickName}
+                            imm: {pick.immunityPickName}
                           </>
                         ) : (
                           "—"

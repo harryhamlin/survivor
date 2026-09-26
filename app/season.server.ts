@@ -16,6 +16,7 @@ export type Episode = {
   id: number;
   episodeNumber: number;
   picksLockAt: Date;
+  immunityType: "tribe" | "individual";
 };
 
 // The season fantasy players are currently drafting/predicting for. Falls
@@ -56,7 +57,7 @@ export async function getCurrentEpisode(
   seasonId: number,
 ): Promise<Episode | null> {
   const { rows } = await pool.query(
-    `SELECT id, episode_number, picks_lock_at FROM episodes
+    `SELECT id, episode_number, picks_lock_at, immunity_type FROM episodes
      WHERE season_id = $1 AND picks_lock_at > now()
      ORDER BY episode_number ASC
      LIMIT 1`,
@@ -68,6 +69,7 @@ export async function getCurrentEpisode(
     id: row.id as number,
     episodeNumber: row.episode_number as number,
     picksLockAt: row.picks_lock_at as Date,
+    immunityType: row.immunity_type as "tribe" | "individual",
   };
 }
 

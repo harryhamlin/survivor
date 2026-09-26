@@ -45,8 +45,9 @@ CREATE TABLE IF NOT EXISTS fantasy_players (
   user_id INTEGER UNIQUE NOT NULL REFERENCES users(id)
 );
 
--- An in-show tribe for a season (e.g. its name and color). Weekly immunity
--- is predicted per-tribe (see weekly_picks.immunity_tribe_pick_id) rather
+-- An in-show tribe for a season (e.g. its name and color). Pre-merge
+-- episodes predict immunity per-tribe (see
+-- weekly_picks.immunity_tribe_pick_id and episodes.immunity_type) rather
 -- than per-contestant, so this needs to be a real table with ids rather than
 -- a hardcoded pair of color strings.
 CREATE TABLE IF NOT EXISTS tribes (
@@ -83,6 +84,11 @@ CREATE TABLE IF NOT EXISTS contestants (
 -- itself locks at episode 1's picks_lock_at (there's no separate draft-lock
 -- column). `status` tracks an episode through the pipeline the backend
 -- drives it through: airs, then its result gets recorded and scored.
+-- `immunity_type` is which kind of immunity this episode plays for —
+-- pre-merge episodes are usually tribe immunity, post-merge ones individual
+-- — and is what tells the backend whether to collect (and later grade) a
+-- weekly_picks.immunity_tribe_pick_id or an immunity_contestant_pick_id for
+-- this episode.
 CREATE TABLE IF NOT EXISTS episodes (
   id SERIAL PRIMARY KEY,
   season_id INTEGER NOT NULL REFERENCES seasons(id),
@@ -91,6 +97,8 @@ CREATE TABLE IF NOT EXISTS episodes (
   picks_lock_at TIMESTAMPTZ NOT NULL,
   status TEXT NOT NULL DEFAULT 'upcoming'
     CHECK (status IN ('upcoming', 'aired', 'scored')),
+  immunity_type TEXT NOT NULL DEFAULT 'tribe'
+    CHECK (immunity_type IN ('tribe', 'individual')),
   UNIQUE (season_id, episode_number)
 );
 
@@ -118,15 +126,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS draft_picks_one_ultimate_pick
   WHERE is_ultimate_pick;
 
 -- A fantasy player's predictions for a given episode: who gets voted out,
--- and which tribe wins immunity. One row per (episode, player) — editing an
--- episode's picks again overwrites them, but past episodes' rows stay
--- untouched, so history accumulates for the /leaderboard page.
+-- and who (or which tribe) wins immunity. One row per (episode, player) —
+-- editing an episode's picks again overwrites them, but past episodes' rows
+-- stay untouched, so history accumulates for the /leaderboard page.
+-- immunity_tribe_pick_id and immunity_contestant_pick_id are both nullable
+-- because exactly one applies per row, depending on that episode's
+-- immunity_type — the backend (the dashboard action) is what decides which
+-- one to fill in, this table doesn't enforce the exclusivity itself.
 CREATE TABLE IF NOT EXISTS weekly_picks (
   id SERIAL PRIMARY KEY,
   episode_id INTEGER NOT NULL REFERENCES episodes(id),
   player_id INTEGER NOT NULL REFERENCES fantasy_players(id),
   elimination_pick_id INTEGER NOT NULL REFERENCES contestants(id),
-  immunity_tribe_pick_id INTEGER NOT NULL REFERENCES tribes(id),
+  immunity_tribe_pick_id INTEGER REFERENCES tribes(id),
+  immunity_contestant_pick_id INTEGER REFERENCES contestants(id),
   submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (episode_id, player_id)
 );
@@ -136,14 +149,17 @@ CREATE TABLE IF NOT EXISTS weekly_picks (
 -- (a contestant is "out" once they appear as some episode's
 -- eliminated_contestant_id). One row per episode (episode_id is the PK
 -- directly, rather than a separate serial id, since the relationship is
--- inherently 1:1). Both outcome columns are nullable so a result can be
--- entered incrementally (e.g. the boot is known before the immunity tribe
--- is confirmed); `finalized_at` being set is what marks the row as official
--- rather than a draft-in-progress.
+-- inherently 1:1). All three outcome columns are nullable so a result can be
+-- entered incrementally (e.g. the boot is known before immunity is
+-- confirmed) — winning_tribe_id and immunity_contestant_id are also
+-- mutually exclusive in practice, the same way their weekly_picks
+-- counterparts are, per that episode's immunity_type. `finalized_at` being
+-- set is what marks the row as official rather than a draft-in-progress.
 CREATE TABLE IF NOT EXISTS episode_results (
   episode_id INTEGER PRIMARY KEY REFERENCES episodes(id),
   eliminated_contestant_id INTEGER REFERENCES contestants(id),
   winning_tribe_id INTEGER REFERENCES tribes(id),
+  immunity_contestant_id INTEGER REFERENCES contestants(id),
   finalized_at TIMESTAMPTZ
 );
 
