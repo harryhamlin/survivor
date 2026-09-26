@@ -35,6 +35,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   // db/schema.sql. tribe_color is nullable: a contestant with no tribe_id
   // assigned yet (see the note on the seed data in db/schema.sql) just gets
   // the frame's neutral default border instead.
+  // Grouped by tribe so tribemates sit together, with eliminated contestants
+  // pushed to the end of the grid regardless of tribe (they're no longer on
+  // one, in the game sense — even though tribe_id itself is left untouched
+  // for history's sake, see db/schema.sql).
   const contestantsResult = await pool.query(
     `SELECT
        c.id,
@@ -46,7 +50,7 @@ export async function loader({ request }: Route.LoaderArgs) {
      FROM contestants c
      LEFT JOIN tribes t ON t.id = c.tribe_id
      WHERE c.season_id = $1
-     ORDER BY c.name`,
+     ORDER BY eliminated, t.name NULLS LAST, c.name`,
     [season.id],
   );
   const contestants = contestantsResult.rows.map((row) => ({
