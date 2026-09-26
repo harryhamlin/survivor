@@ -54,7 +54,7 @@ export function Leaderboard({
         {isLoggedIn ? (
           <Link
             to="/dashboard"
-            className="block w-full rounded-lg bg-primary px-4 py-3 text-center font-medium text-black hover:opacity-90"
+            className="block w-full bg-primary px-4 py-3 text-center font-medium text-black hover:opacity-90"
           >
             go to dashboard
           </Link>
@@ -62,7 +62,7 @@ export function Leaderboard({
           <div className="space-y-3">
             <Link
               to="/login"
-              className="block w-full rounded-lg bg-primary px-4 py-3 text-center font-medium text-black hover:opacity-90"
+              className="block w-full bg-primary px-4 py-3 text-center font-medium text-black hover:opacity-90"
             >
               log in
             </Link>
