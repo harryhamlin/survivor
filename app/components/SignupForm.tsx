@@ -22,13 +22,13 @@ export function SignupForm({ error }: { error?: string }) {
                 htmlFor="name"
                 className="block text-sm font-medium text-primary"
               >
-                Name
+                First name
               </label>
               <input
                 id="name"
                 name="name"
                 type="text"
-                autoComplete="name"
+                autoComplete="given-name"
                 required
                 className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
