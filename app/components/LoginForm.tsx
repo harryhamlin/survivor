@@ -38,20 +38,12 @@ export function LoginForm({ error }: { error?: string }) {
               />
             </div>
             <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-medium text-primary"
-                >
-                  Password
-                </label>
-                <Link
-                  to="/forgot-password"
-                  className="text-sm text-primary/70 underline"
-                >
-                  Forgot password?
-                </Link>
-              </div>
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-primary"
+              >
+                Password
+              </label>
               <input
                 id="password"
                 name="password"
@@ -75,6 +67,11 @@ export function LoginForm({ error }: { error?: string }) {
             Need an account?{" "}
             <Link to="/signup" className="underline">
               Sign up
+            </Link>
+          </p>
+          <p className="text-center text-sm text-primary/70">
+            <Link to="/forgot-password" className="underline">
+              Forgot password?
             </Link>
           </p>
         </div>
