@@ -441,7 +441,7 @@ export default function Dashboard({
             />
             {weeklyPicksLockLabel && (
               <p className="text-center text-sm text-primary/70">
-                this episode&apos;s picks are due {weeklyPicksLockLabel}.
+                this week&apos;s picks are changeable until {weeklyPicksLockLabel}.
               </p>
             )}
           </>
