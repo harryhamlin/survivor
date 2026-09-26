@@ -99,12 +99,19 @@ CREATE TABLE IF NOT EXISTS tribes (
 -- (and final_placement) is decided. Ties are allowed here (no
 -- UNIQUE(season_id, final_placement)) since a multi-boot episode can
 -- eliminate more than one contestant at the same placement.
+-- `idols` and `shot_in_the_dark` are simple "currently holding one" flags,
+-- hand-updated as the season plays out; `advantages` is free text (a
+-- contestant can hold more than one, or one with idiosyncratic rules) rather
+-- than a boolean, since advantages vary season to season unlike idols/SITD.
 CREATE TABLE IF NOT EXISTS contestants (
   id SERIAL PRIMARY KEY,
   season_id INTEGER NOT NULL REFERENCES seasons(id),
   name TEXT NOT NULL,
   tribe_id INTEGER REFERENCES tribes(id),
   final_placement INTEGER,
+  idols BOOLEAN NOT NULL DEFAULT false,
+  advantages TEXT,
+  shot_in_the_dark BOOLEAN NOT NULL DEFAULT false,
   UNIQUE (season_id, name)
 );
 
