@@ -10,7 +10,7 @@ import { SeasonResults } from "../components/SeasonResults";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "season results" },
+    { title: "game_results" },
     { name: "description", content: "Actual episode-by-episode results" },
   ];
 }

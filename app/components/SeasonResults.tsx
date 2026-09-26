@@ -36,7 +36,7 @@ export function SeasonResults({
       <TopBanner displayName={displayName} page="season-results" />
       <div className="mx-auto max-w-2xl space-y-8 px-4 py-12">
         <h1 className="text-2xl font-semibold text-primary">
-          season results
+          game_results
         </h1>
 
         {episodes.length === 0 ? (
