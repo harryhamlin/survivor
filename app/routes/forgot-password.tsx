@@ -1,8 +1,6 @@
-// The "/forgot-password" route: looks up the submitted email and, if it
-// matches an account, emails a password reset link. The response is
-// identical either way (see ForgotPasswordForm) so this can't be used to
-// discover which emails have accounts — only the actual email-sending step
-// is skipped for a non-match.
+// Password recovery returns the same response for unknown and suppressed accounts.
+import { readFormData, validEmail } from "../security.server";
+import { accountKey, isRateLimited, limitRequest } from "../rateLimit.server";
 import type { Route } from "./+types/forgot-password";
 import pool from "../db.server";
 import { createPasswordResetToken } from "../passwordReset.server";
@@ -18,8 +16,18 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const formData = await request.formData();
+  await limitRequest(request, "forgot-password", 10, 15 * 60_000);
+  const formData = await readFormData(request);
   const email = String(formData.get("email") ?? "").trim();
+
+  if (!validEmail(email)) return { sent: true };
+  // Suppress repeats without revealing whether an account exists. The global
+  // budget also caps provider spend when an attacker rotates IPs and accounts.
+  if (await isRateLimited(`reset:cooldown:${accountKey(email)}`, 1, 60_000) ||
+      await isRateLimited(`reset:account:${accountKey(email)}`, 3, 60 * 60_000) ||
+      await isRateLimited("reset:email-budget", 100, 60 * 60_000)) {
+    return { sent: true };
+  }
 
   const result = await pool.query("SELECT id FROM users WHERE email = $1", [
     email,
@@ -27,7 +35,8 @@ export async function action({ request }: Route.ActionArgs) {
   const user = result.rows[0] as { id: number } | undefined;
 
   if (user) {
-    const token = await createPasswordResetToken(user.id);
+    const token = await createPasswordResetToken(user.id, email);
+    if (!token) return { sent: true };
     // getTrustedOrigin (rather than trusting the request's Host header
     // directly) is what keeps this link pointing at our own domain even if
     // a request ever reaches the app with a spoofed Host.

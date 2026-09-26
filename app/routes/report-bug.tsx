@@ -1,7 +1,8 @@
 import type { Route } from "./+types/report-bug";
 import pool from "../db.server";
 import { getUserId } from "../session.server";
-import { getClientIp, isRateLimited } from "../rateLimit.server";
+import { limitRequest } from "../rateLimit.server";
+import { readFormData } from "../security.server";
 
 const MAX_REPORT_LENGTH = 2000;
 // Generous enough for genuine back-to-back reports, tight enough to blunt a
@@ -10,8 +11,9 @@ const RATE_LIMIT = 5;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 
 export async function action({ request }: Route.ActionArgs) {
+  await limitRequest(request, "report-bug", RATE_LIMIT, RATE_LIMIT_WINDOW_MS);
   const userId = await getUserId(request);
-  const formData = await request.formData();
+  const formData = await readFormData(request);
   const report = String(formData.get("report") ?? "").trim();
 
   if (!report) {
@@ -19,11 +21,6 @@ export async function action({ request }: Route.ActionArgs) {
   }
   if (report.length > MAX_REPORT_LENGTH) {
     return { error: `Please keep it under ${MAX_REPORT_LENGTH} characters` };
-  }
-
-  const clientIp = getClientIp(request);
-  if (isRateLimited(`report-bug:${clientIp}`, RATE_LIMIT, RATE_LIMIT_WINDOW_MS)) {
-    return { error: "Too many reports — please try again later" };
   }
 
   await pool.query("INSERT INTO bug_reports (user_id, report) VALUES ($1, $2)", [

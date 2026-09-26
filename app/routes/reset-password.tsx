@@ -6,11 +6,12 @@
 // after already succeeding once).
 import bcrypt from "bcryptjs";
 import type { Route } from "./+types/reset-password";
-import pool from "../db.server";
-import { createUserSession } from "../session.server";
+import { passwordError, readFormData } from "../security.server";
+import { limitRequest } from "../rateLimit.server";
+import { logout } from "../session.server";
 import {
   getUserIdForResetToken,
-  markPasswordResetTokenUsed,
+  resetPassword,
 } from "../passwordReset.server";
 import { ResetPasswordForm } from "../components/ResetPasswordForm";
 
@@ -27,28 +28,16 @@ export async function loader({ params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const userId = await getUserIdForResetToken(params.token);
-  if (userId === null) {
-    return { valid: false };
-  }
-
-  const formData = await request.formData();
+  await limitRequest(request, "reset-password", 10, 15 * 60_000);
+  const formData = await readFormData(request);
   const password = String(formData.get("password") ?? "");
-  if (password.length < 8) {
-    return { valid: true, error: "Password must be at least 8 characters" };
-  }
-
+  const error = passwordError(password);
+  if (error) return { valid: true, error };
+  if (await getUserIdForResetToken(params.token) === null) return { valid: false };
   const passwordHash = await bcrypt.hash(password, 10);
-  await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [
-    passwordHash,
-    userId,
-  ]);
-  await markPasswordResetTokenUsed(params.token);
-
-  // Signs them straight in, the same way completing signup does, rather
-  // than sending them back to /login to re-type the password they just
-  // chose.
-  return createUserSession(userId, "/dashboard");
+  if (!await resetPassword(params.token, passwordHash)) return { valid: false };
+  // Require a fresh login after revoking all previous sessions.
+  return logout(request);
 }
 
 export default function ResetPassword({

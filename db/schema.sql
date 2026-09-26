@@ -16,6 +16,30 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Opaque session and verification tokens are stored only as hashes.
+CREATE TABLE IF NOT EXISTS user_sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS user_sessions_user_id ON user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS user_sessions_expiry ON user_sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS email_change_tokens (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT UNIQUE NOT NULL,
+  new_email TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+-- Fixed windows are updated atomically and shared by all web processes.
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key_hash TEXT PRIMARY KEY,
+  hits INTEGER NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rate_limits_expiry ON rate_limits(expires_at);
+
 CREATE TABLE IF NOT EXISTS bug_reports (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id),

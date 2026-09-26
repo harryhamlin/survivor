@@ -5,7 +5,7 @@
 // Pure markup; the actual update logic lives in the route.
 import { Form } from "react-router";
 
-type ProfileResult = { intent: "update-profile"; error?: string; success?: boolean };
+type ProfileResult = { intent: "update-profile"; error?: string; success?: boolean; message?: string };
 type PasswordResult = { intent: "change-password"; error?: string; success?: boolean };
 
 export function AccountForm({
@@ -68,6 +68,18 @@ export function AccountForm({
               className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
+          <div className="space-y-1">
+            <label htmlFor="emailChangePassword" className="block text-sm font-medium text-primary">
+              Current password (required to change email)
+            </label>
+            <input
+              id="emailChangePassword"
+              name="currentPassword"
+              type="password"
+              autoComplete="current-password"
+              className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
           <div className="flex items-center gap-2">
             <input
               id="emailNotifications"
@@ -86,7 +98,7 @@ export function AccountForm({
             <p className="text-sm text-red-500">{profileResult.error}</p>
           )}
           {profileResult?.success && (
-            <p className="text-sm text-primary/70">Saved.</p>
+            <p className="text-sm text-primary/70">{profileResult.message ?? "Saved."}</p>
           )}
           <button
             type="submit"
@@ -101,6 +113,7 @@ export function AccountForm({
         <h1 className="text-lg font-semibold text-primary">
           Change password
         </h1>
+        <p className="text-sm text-primary/70">Changing your password signs you out on all devices.</p>
         {/* Keyed on whether the last change succeeded so the fields clear
             afterward instead of leaving the just-submitted values sitting
             in a password box. */}
@@ -139,7 +152,7 @@ export function AccountForm({
               type="password"
               autoComplete="new-password"
               required
-              minLength={8}
+              minLength={4}
               className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>

@@ -62,7 +62,7 @@ export function SignupForm({ error }: { error?: string }) {
                 type="password"
                 autoComplete="new-password"
                 required
-                minLength={8}
+                minLength={4}
                 className="w-full border border-primary/40 bg-background px-3 py-2 text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>

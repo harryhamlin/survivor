@@ -33,6 +33,7 @@ export async function sendEmail({
     `https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`,
     {
       method: "POST",
+      signal: AbortSignal.timeout(10_000),
       headers: {
         // Mailgun authenticates with HTTP Basic Auth using the literal
         // username "api" and the API key as the password.

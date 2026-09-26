@@ -1,6 +1,8 @@
 // The "/signup" route: creates a new account and immediately signs the user
 // in, the same way a fresh login would.
 import bcrypt from "bcryptjs";
+import { passwordError, readFormData, validEmail } from "../security.server";
+import { limitRequest } from "../rateLimit.server";
 import type { Route } from "./+types/signup";
 import pool from "../db.server";
 import { createUserSession } from "../session.server";
@@ -12,7 +14,8 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const formData = await request.formData();
+  await limitRequest(request, "signup", 5, 60 * 60_000);
+  const formData = await readFormData(request);
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -20,6 +23,12 @@ export async function action({ request }: Route.ActionArgs) {
   if (!name || !email || !password) {
     return { error: "All fields are required" };
   }
+
+  if (name.length > 100 || !validEmail(email)) {
+    return { error: "Enter a valid email and a name of at most 100 characters" };
+  }
+  const error = passwordError(password);
+  if (error) return { error };
 
   const passwordHash = await bcrypt.hash(password, 10);
 
@@ -36,7 +45,7 @@ export async function action({ request }: Route.ActionArgs) {
     // dashboard's own defensive upsert) so this account shows up on "/"'s
     // public standings immediately, even before its first dashboard visit.
     await getOrCreateFantasyPlayer(user.id, { displayName: name, email });
-    return createUserSession(user.id, "/dashboard");
+    return createUserSession(user.id, "/dashboard", passwordHash, email);
   } catch {
     // Most likely cause: `email` collided with an existing account (it's
     // UNIQUE).

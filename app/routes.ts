@@ -24,6 +24,7 @@ export default [
   route("season-results", "routes/season-results.tsx"),
   route("contestants", "routes/contestants.tsx"),
   route("account", "routes/account.tsx"),
+  route("confirm-email/:token", "routes/confirm-email.tsx"),
   route("logout", "routes/logout.tsx"),
   route("report-bug", "routes/report-bug.tsx"),
 ] satisfies RouteConfig;

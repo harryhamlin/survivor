@@ -31,6 +31,9 @@ const pool = new pg.Pool({
 const TABLES = [
   "users",
   "password_reset_tokens",
+  "user_sessions",
+  "email_change_tokens",
+  "rate_limits",
   "seasons",
   "fantasy_players",
   "tribes",

@@ -1,26 +1,51 @@
-// A simple in-memory sliding-window rate limiter, keyed by whatever string
-// the caller passes in (e.g. a client IP). Good enough to blunt scripted
-// abuse of a low-stakes public endpoint without standing up a shared store —
-// it resets on dyno restart and isn't shared across multiple dynos, which is
-// an acceptable tradeoff here (see app/routes/report-bug.tsx), not something
-// this should be reused for anything higher-stakes without revisiting.
-const hits = new Map<string, number[]>();
+import type { PoolClient } from "pg";
+import { isIP } from "node:net";
+import pool from "./db.server";
+import { hashToken } from "./security.server";
 
-export function isRateLimited(
-  key: string,
-  limit: number,
-  windowMs: number,
-): boolean {
-  const now = Date.now();
-  const recentHits = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
-  recentHits.push(now);
-  hits.set(key, recentHits);
-  return recentHits.length > limit;
+let nextCleanup = 0;
+
+export async function isRateLimited(key: string, limit: number, windowMs: number, client?: PoolClient): Promise<boolean> {
+  // Bounded counters, expiring rows and atomic updates are shared across dynos.
+  // Storage failures fail closed instead of silently allowing unlimited traffic.
+  if (!client && Date.now() >= nextCleanup) {
+    nextCleanup = Date.now() + 60_000;
+    await pool.query("DELETE FROM rate_limits WHERE expires_at <= now()");
+  }
+  const { rows } = await (client ?? pool).query(
+    `INSERT INTO rate_limits (key_hash, hits, expires_at)
+     VALUES ($1, 1, clock_timestamp() + $3 * interval '1 millisecond')
+     ON CONFLICT (key_hash) DO UPDATE SET
+       hits = CASE WHEN rate_limits.expires_at <= clock_timestamp() THEN 1
+                   ELSE LEAST(rate_limits.hits + 1, $2 + 1) END,
+       expires_at = CASE WHEN rate_limits.expires_at <= clock_timestamp()
+                        THEN clock_timestamp() + $3 * interval '1 millisecond'
+                        ELSE rate_limits.expires_at END
+     RETURNING hits`,
+    [hashToken(key), limit, windowMs],
+  );
+  return rows[0].hits > limit;
 }
 
-// Heroku's router sets X-Forwarded-For; the first entry is the original
-// client (later entries, if any, are intermediate proxies).
 export function getClientIp(request: Request): string {
-  const forwardedFor = request.headers.get("X-Forwarded-For");
-  return forwardedFor?.split(",")[0]?.trim() || "unknown";
+  // Heroku appends the connecting peer on the RIGHT. Only trust this header
+  // there; other deployments share a conservative bucket until configured.
+  if (!process.env.DYNO) return "unknown";
+  const ip = request.headers.get("X-Forwarded-For")?.split(",").at(-1)?.trim();
+  if (!ip || !isIP(ip)) return "unknown";
+  return isIP(ip) === 6 ? new URL(`http://[${ip}]/`).hostname : ip;
+}
+
+export async function limitRequest(request: Request, scope: string, limit: number, windowMs: number) {
+  if (await isRateLimited(`${scope}:ip:${getClientIp(request)}`, limit, windowMs)) {
+    throw new Response("Too many attempts. Please try again later.", {
+      status: 429,
+      statusText: "Too many attempts. Please try again later.",
+      headers: { "Retry-After": String(Math.ceil(windowMs / 1000)) },
+    });
+  }
+}
+
+export function accountKey(email: string): string {
+  return email.trim().toLowerCase();
 }

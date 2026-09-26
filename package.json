@@ -9,7 +9,8 @@
     "typecheck": "react-router typegen && tsc",
     "db:migrate": "node db/migrate.mjs",
     "db:seed": "node db/seed.mjs",
-    "db:send-reminders": "node db/sendReminderEmails.mjs"
+    "db:send-reminders": "node db/sendReminderEmails.mjs",
+    "test:security": "node --test tests/security.test.cjs"
   },
   "dependencies": {
     "@react-router/node": "^8.4.0",
