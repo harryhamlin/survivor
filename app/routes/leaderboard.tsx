@@ -141,8 +141,19 @@ export async function loader({ request }: Route.LoaderArgs) {
     });
   }
 
+  // Only episodes anyone actually picked for get a column — an episode
+  // with no weekly_picks at all (a pre-game placeholder recording a boot
+  // from before the fantasy game started, say, or just a future episode no
+  // one's picked for yet) would otherwise show up as a column of nothing
+  // but "—". This also means a brand new episode's column simply appears
+  // once its first pick comes in, rather than needing to know in code which
+  // episode number the season "really" starts at.
   const episodesResult = await pool.query(
-    "SELECT episode_number FROM episodes WHERE season_id = $1 ORDER BY episode_number",
+    `SELECT DISTINCT e.episode_number
+     FROM episodes e
+     JOIN weekly_picks wp ON wp.episode_id = e.id
+     WHERE e.season_id = $1
+     ORDER BY e.episode_number`,
     [season.id],
   );
   const episodeNumbers = episodesResult.rows.map(

@@ -13,9 +13,11 @@ import {
   formatPacific,
   type Season,
 } from "../season.server";
+import { getPlayerScoreBreakdown } from "../scoring.server";
 import { TopBanner } from "../components/TopBanner";
 import { TeamSection } from "../components/TeamSection";
 import { ScoringMetricsModal } from "../components/ScoringMetricsModal";
+import { ScoreOverviewModal } from "../components/ScoreOverviewModal";
 import { WeeklyPicksModal } from "../components/WeeklyPicksModal";
 
 export function meta({}: Route.MetaArgs) {
@@ -180,6 +182,12 @@ export async function loader({ request }: Route.LoaderArgs) {
       : null;
   }
 
+  const scoreBreakdown = await getPlayerScoreBreakdown(
+    season.id,
+    player.id,
+    season.finalistCount,
+  );
+
   return {
     user: userRow,
     season,
@@ -195,6 +203,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     weeklyPicksLockLabel: currentEpisode
       ? formatPacific(currentEpisode.picksLockAt)
       : null,
+    scoreBreakdown,
   } as const;
 }
 
@@ -408,6 +417,7 @@ export default function Dashboard({
     isDraftLocked,
     draftLockLabel,
     weeklyPicksLockLabel,
+    scoreBreakdown,
   } = loaderData;
   const hasTeam = team.length > 0;
 
@@ -461,6 +471,11 @@ export default function Dashboard({
                 : "The draft lock time hasn't been set yet."}
           </p>
         </div>
+        <ScoreOverviewModal
+          weeklyPicks={scoreBreakdown.weeklyPicks}
+          finalThree={scoreBreakdown.finalThree}
+          totalScore={scoreBreakdown.totalScore}
+        />
         <ScoringMetricsModal />
       </div>
     </main>

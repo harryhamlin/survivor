@@ -36,6 +36,22 @@ export async function getSeasonScores(
   }));
 }
 
+// +4 for a drafted contestant who reaches the season's final
+// `finalist_count`, +4 more if they're specifically the Ultimate Survivor
+// pick and they win outright (final_placement 1). Shared by
+// getFinalThreeScores (the season-wide total) and getPlayerScoreBreakdown
+// (one player's own breakdown), so this rule exists in exactly one place.
+function scoreFinalThreePick(pick: DraftPick, finalistCount: number): number {
+  let points = 0;
+  if (pick.finalPlacement !== null && pick.finalPlacement <= finalistCount) {
+    points += 4;
+  }
+  if (pick.isUltimatePick && pick.finalPlacement === 1) {
+    points += 4;
+  }
+  return points;
+}
+
 async function getFinalThreeScores(
   seasonId: number,
   finalistCount: number,
@@ -66,18 +82,10 @@ async function getFinalThreeScores(
   return playerRows.map((row) => {
     const playerId = row.id as number;
     const picks = picksByPlayerId.get(playerId) ?? [];
-    let score = 0;
-    for (const pick of picks) {
-      // +4 for each drafted contestant who reaches the season's final
-      // `finalist_count`.
-      if (pick.finalPlacement !== null && pick.finalPlacement <= finalistCount) {
-        score += 4;
-      }
-      // +4 more if the Ultimate Survivor pick specifically wins the season.
-      if (pick.isUltimatePick && pick.finalPlacement === 1) {
-        score += 4;
-      }
-    }
+    const score = picks.reduce(
+      (sum, pick) => sum + scoreFinalThreePick(pick, finalistCount),
+      0,
+    );
     return { playerId, score };
   });
 }
@@ -202,30 +210,41 @@ export function isPredictionCorrect(
   return prediction !== null && winners.includes(prediction);
 }
 
-async function getWeeklyPickScores(seasonId: number): Promise<PlayerScore[]> {
+// How many contestants were still in the game right before each episode's
+// boot(s) — so anyone voted out *that* episode still counts — the season's
+// roster size minus however many were already eliminated in strictly
+// earlier episodes. A multi-boot episode decrements by however many it
+// eliminated, not just one. Shared by getWeeklyPickScores (the season-wide
+// total) and getPlayerScoreBreakdown (one player's own breakdown).
+async function getRemainingCountByEpisodeId(
+  seasonId: number,
+  infoByEpisodeId: Map<number, EpisodeScoringInfo>,
+): Promise<Map<number, number>> {
   const {
     rows: [{ count: totalContestants }],
   } = await pool.query(
     "SELECT count(*)::int AS count FROM contestants WHERE season_id = $1",
     [seasonId],
   );
-
-  const infoByEpisodeId = await getEpisodeScoringInfo(seasonId);
   const episodesInOrder = Array.from(infoByEpisodeId.entries()).sort(
     (a, b) => a[1].episodeNumber - b[1].episodeNumber,
   );
 
-  // How many contestants were still in the game right before each
-  // episode's boot(s) — so anyone voted out *that* episode still counts —
-  // the season's roster size minus however many were already eliminated in
-  // strictly earlier episodes. A multi-boot episode decrements by however
-  // many it eliminated, not just one.
   const remainingCountByEpisodeId = new Map<number, number>();
   let remaining = totalContestants as number;
   for (const [episodeId, info] of episodesInOrder) {
     remainingCountByEpisodeId.set(episodeId, remaining);
     remaining -= info.eliminationWinners.length;
   }
+  return remainingCountByEpisodeId;
+}
+
+async function getWeeklyPickScores(seasonId: number): Promise<PlayerScore[]> {
+  const infoByEpisodeId = await getEpisodeScoringInfo(seasonId);
+  const remainingCountByEpisodeId = await getRemainingCountByEpisodeId(
+    seasonId,
+    infoByEpisodeId,
+  );
 
   const { rows: pickRows } = await pool.query(
     `SELECT wp.player_id, wp.episode_id, wp.elimination_pick_id,
@@ -276,4 +295,131 @@ async function getWeeklyPickScores(seasonId: number): Promise<PlayerScore[]> {
     playerId,
     score,
   }));
+}
+
+export type WeeklyPickBreakdownRow = {
+  episodeNumber: number;
+  eliminationPickName: string | null;
+  eliminationStatus: ScoringStatus;
+  eliminationPoints: number | null;
+  immunityPickName: string | null;
+  immunityStatus: ScoringStatus;
+  immunityPoints: number | null;
+};
+
+export type FinalThreeBreakdownRow = {
+  contestantName: string;
+  isUltimatePick: boolean;
+  finalPlacement: number | null;
+  points: number;
+};
+
+export type PlayerScoreBreakdown = {
+  weeklyPicks: WeeklyPickBreakdownRow[];
+  finalThree: FinalThreeBreakdownRow[];
+  totalScore: number;
+};
+
+// One player's full score, broken down by every scored element — each
+// episode's elimination and immunity picks, plus each drafted contestant's
+// final-3 result — rather than just the single total getSeasonScores
+// returns. Built from the same primitives (getEpisodeScoringInfo,
+// getRemainingCountByEpisodeId, scorePrediction, scoreFinalThreePick) so a
+// player's displayed breakdown always adds up to exactly what
+// getSeasonScores counted for them.
+export async function getPlayerScoreBreakdown(
+  seasonId: number,
+  playerId: number,
+  finalistCount: number,
+): Promise<PlayerScoreBreakdown> {
+  const infoByEpisodeId = await getEpisodeScoringInfo(seasonId);
+  const remainingCountByEpisodeId = await getRemainingCountByEpisodeId(
+    seasonId,
+    infoByEpisodeId,
+  );
+
+  const { rows: pickRows } = await pool.query(
+    `SELECT
+       wp.episode_id,
+       e.episode_number,
+       wp.elimination_pick_id,
+       c.name AS elimination_pick_name,
+       wp.immunity_tribe_pick_id,
+       wp.immunity_contestant_pick_id,
+       COALESCE(t.name, ic.name) AS immunity_pick_name
+     FROM weekly_picks wp
+     JOIN episodes e ON e.id = wp.episode_id
+     LEFT JOIN contestants c ON c.id = wp.elimination_pick_id
+     LEFT JOIN tribes t ON t.id = wp.immunity_tribe_pick_id
+     LEFT JOIN contestants ic ON ic.id = wp.immunity_contestant_pick_id
+     WHERE wp.player_id = $1 AND e.season_id = $2
+     ORDER BY e.episode_number`,
+    [playerId, seasonId],
+  );
+
+  const weeklyPicks: WeeklyPickBreakdownRow[] = pickRows.map((row) => {
+    const episodeId = row.episode_id as number;
+    const info = infoByEpisodeId.get(episodeId);
+    const eliminationPickId = row.elimination_pick_id as number | null;
+    const immunityPickId = (
+      info?.immunityType === "individual"
+        ? row.immunity_contestant_pick_id
+        : row.immunity_tribe_pick_id
+    ) as number | null;
+    const remainingCount = remainingCountByEpisodeId.get(episodeId) ?? 0;
+
+    return {
+      episodeNumber: row.episode_number as number,
+      eliminationPickName: row.elimination_pick_name as string | null,
+      eliminationStatus: info?.eliminationStatus ?? "pending",
+      eliminationPoints: info
+        ? scorePrediction(
+            info.eliminationStatus,
+            eliminationPickId,
+            info.eliminationWinners,
+            Math.ceil(remainingCount / 4),
+          )
+        : null,
+      immunityPickName: row.immunity_pick_name as string | null,
+      immunityStatus: info?.immunityStatus ?? "pending",
+      immunityPoints: info
+        ? scorePrediction(
+            info.immunityStatus,
+            immunityPickId,
+            info.immunityWinners,
+            info.immunityType === "tribe" ? 1 : 3,
+          )
+        : null,
+    };
+  });
+
+  const { rows: draftRows } = await pool.query(
+    `SELECT c.name, dp.is_ultimate_pick, c.final_placement
+     FROM draft_picks dp
+     JOIN contestants c ON c.id = dp.contestant_id
+     WHERE dp.player_id = $1 AND dp.season_id = $2
+     ORDER BY dp.is_ultimate_pick DESC, c.name`,
+    [playerId, seasonId],
+  );
+
+  const finalThree: FinalThreeBreakdownRow[] = draftRows.map((row) => {
+    const pick: DraftPick = {
+      finalPlacement: row.final_placement as number | null,
+      isUltimatePick: row.is_ultimate_pick as boolean,
+    };
+    return {
+      contestantName: row.name as string,
+      isUltimatePick: pick.isUltimatePick,
+      finalPlacement: pick.finalPlacement,
+      points: scoreFinalThreePick(pick, finalistCount),
+    };
+  });
+
+  const totalScore =
+    weeklyPicks.reduce(
+      (sum, row) => sum + (row.eliminationPoints ?? 0) + (row.immunityPoints ?? 0),
+      0,
+    ) + finalThree.reduce((sum, row) => sum + row.points, 0);
+
+  return { weeklyPicks, finalThree, totalScore };
 }
