@@ -159,6 +159,19 @@ CREATE TABLE IF NOT EXISTS weekly_picks (
   UNIQUE (episode_id, player_id)
 );
 
+-- Tracks which "you haven't made your picks yet" reminder emails have
+-- already gone out for an episode, so db/sendReminderEmails.mjs (run
+-- frequently via Heroku Scheduler, since Scheduler has no day-of-week
+-- option of its own) doesn't send the same reminder twice if it happens to
+-- run more than once inside that reminder's target hour.
+CREATE TABLE IF NOT EXISTS reminder_emails_sent (
+  episode_id INTEGER NOT NULL REFERENCES episodes(id),
+  reminder_type TEXT NOT NULL
+    CHECK (reminder_type IN ('monday', 'wednesday_morning', 'wednesday_last_chance')),
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (episode_id, reminder_type)
+);
+
 -- The actual outcome of an episode, recorded once it airs. This is what
 -- weekly_picks gets checked against and what marks a contestant eliminated
 -- (a contestant is "out" once they appear as some episode's

@@ -38,6 +38,7 @@ const TABLES = [
   "episodes",
   "draft_picks",
   "weekly_picks",
+  "reminder_emails_sent",
   "episode_results",
 ];
 
