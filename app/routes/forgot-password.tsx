@@ -7,6 +7,7 @@ import type { Route } from "./+types/forgot-password";
 import pool from "../db.server";
 import { createPasswordResetToken } from "../passwordReset.server";
 import { sendEmail } from "../mailer.server";
+import { getTrustedOrigin } from "../trustedOrigin.server";
 import { ForgotPasswordForm } from "../components/ForgotPasswordForm";
 
 export function meta({}: Route.MetaArgs) {
@@ -27,10 +28,10 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (user) {
     const token = await createPasswordResetToken(user.id);
-    // Built from the request's own origin (rather than a separate env var)
-    // so the link is correct in both local dev and on Heroku without
-    // needing to keep a base-URL setting in sync.
-    const resetLink = `${new URL(request.url).origin}/reset-password/${token}`;
+    // getTrustedOrigin (rather than trusting the request's Host header
+    // directly) is what keeps this link pointing at our own domain even if
+    // a request ever reaches the app with a spoofed Host.
+    const resetLink = `${getTrustedOrigin(request)}/reset-password/${token}`;
     await sendEmail({
       to: email,
       subject: "reset your fantasy survivor password",
