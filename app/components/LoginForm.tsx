@@ -17,7 +17,6 @@ export function LoginForm({ error }: { error?: string }) {
           Fantasy Survivor 51
         </h1>
         <div className="space-y-4">
-          <p className="text-center text-sm text-primary/70">Sign in</p>
           {/* No `action` prop needed: <Form> defaults to POSTing to this
               same route, which is exactly what we want. */}
           <Form method="post" className="space-y-4">
