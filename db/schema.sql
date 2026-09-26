@@ -16,6 +16,13 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS bug_reports (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  report TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS seasons (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,

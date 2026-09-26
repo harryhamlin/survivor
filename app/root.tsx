@@ -12,6 +12,7 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { Footer } from "./components/Footer";
 
 // <link> tags injected into <head> on every page. Currently just the
 // favicon; React Router merges this with any route-specific `links` export.
@@ -32,6 +33,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
+        <Footer />
         <ScrollRestoration />
         <Scripts />
       </body>

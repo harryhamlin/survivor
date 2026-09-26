@@ -25,4 +25,5 @@ export default [
   route("contestants", "routes/contestants.tsx"),
   route("account", "routes/account.tsx"),
   route("logout", "routes/logout.tsx"),
+  route("report-bug", "routes/report-bug.tsx"),
 ] satisfies RouteConfig;
