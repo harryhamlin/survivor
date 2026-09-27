@@ -72,25 +72,41 @@ const REMINDERS = [
     type: "monday",
     dayOfWeek: 1,
     hour: 10,
-    subject: "reminder: make your weekly picks",
+    subject: "make your weekly picks",
     text: (episodeNumber) =>
-      `hey — you haven't picked who's getting voted out or who wins immunity for episode ${episodeNumber} yet. get your picks in before they lock!`,
+      `hi
+
+you haven't picked who's getting voted out or who wins immunity for episode ${episodeNumber} yet
+
+get your picks in before they lock
+
+https://torchsnuffers.com`,
   },
   {
     type: "wednesday_morning",
     dayOfWeek: 3,
     hour: 10,
-    subject: "reminder: picks lock tonight",
+    subject: "picks lock tonight",
     text: (episodeNumber) =>
-      `still no picks from you for episode ${episodeNumber} — they lock tonight, don't miss it!`,
+      `still no picks from you for episode ${episodeNumber}
+    
+    get your picks in before they lock
+    
+    https://torchsnuffers.com`,
   },
   {
     type: "wednesday_last_chance",
     dayOfWeek: 3,
     hour: 19,
-    subject: "last chance: picks lock soon",
+    subject: "last chance",
     text: (episodeNumber) =>
-      `last call — you still haven't made your picks for episode ${episodeNumber}. get them in now before they lock!`,
+      `last call
+    
+    you still haven't made your picks for episode ${episodeNumber}
+    
+    get them in now before they lock
+    
+    https://torchsnuffers.com`,
   },
 ];
 
