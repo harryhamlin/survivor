@@ -5,6 +5,11 @@
 // with an explicit background so scrolled-past columns don't show through).
 // Pure markup — all the data comes from the leaderboard route's loader.
 import { TopBanner } from "./TopBanner";
+import { ScoreOverviewModal } from "./ScoreOverviewModal";
+import type {
+  WeeklyPickBreakdownRow,
+  FinalThreeBreakdownRow,
+} from "../scoring.server";
 
 type Pick = {
   eliminationPickName: string | null;
@@ -27,6 +32,7 @@ export function DetailedScores({
   displayName,
   episodeNumbers,
   rows,
+  scoreBreakdown,
 }: {
   displayName: string;
   episodeNumbers: number[];
@@ -38,6 +44,11 @@ export function DetailedScores({
     ultimatePick: string | null;
     picks: Pick[];
   }[];
+  scoreBreakdown: {
+    weeklyPicks: WeeklyPickBreakdownRow[];
+    finalThree: FinalThreeBreakdownRow[];
+    totalScore: number;
+  };
 }) {
   return (
     <main className="min-h-screen bg-background">
@@ -142,6 +153,11 @@ export function DetailedScores({
             </table>
           </div>
         )}
+        <ScoreOverviewModal
+          weeklyPicks={scoreBreakdown.weeklyPicks}
+          finalThree={scoreBreakdown.finalThree}
+          totalScore={scoreBreakdown.totalScore}
+        />
       </div>
     </main>
   );

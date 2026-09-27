@@ -6,10 +6,12 @@ import type { Route } from "./+types/leaderboard";
 import pool from "../db.server";
 import { requireUserId } from "../session.server";
 import { getCurrentSeason } from "../season.server";
+import { getOrCreateFantasyPlayer } from "../players.server";
 import {
   getSeasonScores,
   getEpisodeScoringInfo,
   isPredictionCorrect,
+  getPlayerScoreBreakdown,
 } from "../scoring.server";
 import { DetailedScores } from "../components/DetailedScores";
 
@@ -33,8 +35,26 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const season = await getCurrentSeason();
   if (!season) {
-    return { displayName, episodeNumbers: [], rows: [] };
+    return {
+      displayName,
+      episodeNumbers: [],
+      rows: [],
+      scoreBreakdown: { weeklyPicks: [], finalThree: [], totalScore: 0 },
+    };
   }
+
+  // The viewer's own score breakdown, for the score_overview modal below
+  // the table — same data/shape as the dashboard's, just also offered here
+  // since this is the other page a player checks their score from.
+  const player = await getOrCreateFantasyPlayer(userId, {
+    displayName,
+    email: userRow.email,
+  });
+  const scoreBreakdown = await getPlayerScoreBreakdown(
+    season.id,
+    player.id,
+    season.finalistCount,
+  );
 
   const scores = await getSeasonScores(season.id, season.finalistCount);
   const scoreByPlayerId = new Map(scores.map((s) => [s.playerId, s.score]));
@@ -183,7 +203,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       (a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName),
     );
 
-  return { displayName, episodeNumbers, rows };
+  return { displayName, episodeNumbers, rows, scoreBreakdown };
 }
 
 export default function Leaderboard({ loaderData }: Route.ComponentProps) {
@@ -192,6 +212,7 @@ export default function Leaderboard({ loaderData }: Route.ComponentProps) {
       displayName={loaderData.displayName}
       episodeNumbers={loaderData.episodeNumbers}
       rows={loaderData.rows}
+      scoreBreakdown={loaderData.scoreBreakdown}
     />
   );
 }
