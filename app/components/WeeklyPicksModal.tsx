@@ -223,15 +223,15 @@ export function WeeklyPicksModal({
               )}
               {/* Set by the dashboard action if the save failed server-side. */}
               {error && <p className="text-sm text-red-500">{error}</p>}
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className={`w-full px-3 py-2 font-medium hover:opacity-90 disabled:opacity-40 ${
-                  hasChanges ? "bg-primary text-black" : "bg-black text-primary"
-                }`}
-              >
-                save picks
-              </button>
+              {hasChanges && (
+                <button
+                  type="submit"
+                  disabled={!canSubmit}
+                  className="w-full bg-primary px-3 py-2 font-medium text-black hover:opacity-90 disabled:opacity-40"
+                >
+                  save picks
+                </button>
+              )}
             </Form>
           </div>
         </div>
