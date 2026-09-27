@@ -57,7 +57,7 @@ export function DetailedScores({
                       reliably stay pinned to a `sticky` cell while scrolling
                       in every browser, but a box-shadow (outside the table
                       border model entirely) always travels with it. */}
-                  <th className="sticky left-0 z-10 min-w-[180px] whitespace-nowrap border-b border-primary/40 bg-background px-3 py-2 text-left text-primary shadow-[1px_0_0_0_color-mix(in_oklab,var(--color-primary)_40%,transparent)]">
+                  <th className="sticky left-0 z-10 whitespace-nowrap border-b border-primary/40 bg-background px-3 py-2 text-left text-primary shadow-[1px_0_0_0_color-mix(in_oklab,var(--color-primary)_40%,transparent)]">
                     player
                   </th>
                   {/* A plain border-l here (rather than relying only on the
