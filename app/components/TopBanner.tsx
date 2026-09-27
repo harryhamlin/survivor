@@ -79,7 +79,7 @@ export function TopBanner({
                   role="menuitem"
                   className="block w-full px-2 py-1 text-left text-sm text-primary/70 hover:bg-primary/10 hover:text-primary"
                 >
-                  Log out
+                  Log_out
                 </button>
               </Form>
             </div>
