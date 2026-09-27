@@ -180,7 +180,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     (row) => row.episode_number as number,
   );
 
-  const rows = playersResult.rows
+  const sortedRows = playersResult.rows
     .map((row) => {
       const playerId = row.player_id as number;
       const picksByEpisode = picksByPlayerId.get(playerId);
@@ -202,6 +202,20 @@ export async function loader({ request }: Route.LoaderArgs) {
     .sort(
       (a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName),
     );
+
+  // Standard competition ranking ("1224"): tied scores share the same rank,
+  // and the next distinct score's rank skips ahead by however many players
+  // tied for the rank before it — a 3-way tie for 3rd is followed by 6th,
+  // not 4th, since 3 players already occupy positions 3-5.
+  let rank = 0;
+  let previousScore: number | null = null;
+  const rows = sortedRows.map((row, index) => {
+    if (row.score !== previousScore) {
+      rank = index + 1;
+      previousScore = row.score;
+    }
+    return { ...row, rank };
+  });
 
   return { displayName, episodeNumbers, rows, scoreBreakdown };
 }
