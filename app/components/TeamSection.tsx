@@ -3,7 +3,7 @@
 // picker pre-filled with their current picks. Deadline/lock messaging lives
 // at the bottom of the dashboard page, not here — this only renders the box
 // itself and its "edit team" link.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TeamPicker } from "./TeamPicker";
 import { TeamRoster } from "./TeamRoster";
 
@@ -12,7 +12,7 @@ export function TeamSection({
   contestants,
   finalistCount,
   isLocked,
-  error,
+  saveResult,
 }: {
   team: {
     id: number;
@@ -23,13 +23,27 @@ export function TeamSection({
   contestants: { id: number; name: string }[];
   finalistCount: number;
   isLocked: boolean;
-  error?: string;
+  // A fresh object every time the draft action runs (even a resubmission of
+  // an unchanged team), so this can drive closing the picker on success
+  // without depending on `team` having actually changed — undefined outside
+  // of just having submitted the draft form.
+  saveResult?: { success?: boolean; error?: string };
 }) {
   const hasTeam = team.length > 0;
   // No team yet -> start straight in the picker. Already has a team -> start
   // on the read-only roster, with an "edit team" button to switch over
   // (unless locked, in which case editing is off the table).
   const [editing, setEditing] = useState(!hasTeam);
+
+  // Switches back to the read-only roster once a save succeeds — keyed off
+  // object identity (a new `saveResult` every submission) rather than
+  // whether `team` itself changed, so this fires even when the saved
+  // picks are identical to what was already there.
+  useEffect(() => {
+    if (saveResult?.success) {
+      setEditing(false);
+    }
+  }, [saveResult]);
 
   // Nothing to show — the bottom-of-page disclaimer explains why.
   if (!hasTeam && isLocked) {
@@ -61,7 +75,7 @@ export function TeamSection({
       initialUltimateSurvivorId={
         team.find((member) => member.isUltimateSurvivor)?.id ?? null
       }
-      error={error}
+      error={saveResult?.error}
     />
   );
 }

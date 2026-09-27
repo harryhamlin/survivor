@@ -313,9 +313,11 @@ async function createOrUpdateDraftAction(
     client.release();
   }
 
-  // Re-fetch the dashboard so it now renders the saved roster instead of the
-  // picker.
-  return redirect("/dashboard");
+  // No redirect: returning success data (rather than navigating away) lets
+  // TeamSection revalidate and switch back to the read-only roster itself —
+  // including when the saved picks are identical to what was already there,
+  // which a redirect-triggered remount wouldn't reliably catch.
+  return { intent: "create-team" as const, success: true };
 }
 
 // Saves (or updates) the player's prediction for who gets voted out and who
@@ -451,13 +453,12 @@ export default function Dashboard({
           </p>
         )}
         <TeamSection
-          key={JSON.stringify(team)}
           team={team}
           contestants={draftPickableContestants}
           finalistCount={loaderData.season.finalistCount}
           isLocked={isDraftLocked}
-          error={
-            actionData?.intent === "create-team" ? actionData.error : undefined
+          saveResult={
+            actionData?.intent === "create-team" ? actionData : undefined
           }
         />
         <div className="space-y-1 text-center text-sm text-primary/70">
