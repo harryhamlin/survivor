@@ -57,6 +57,13 @@ export function WeeklyPicksModal({
   );
 
   const canSubmit = eliminationPickId !== "" && immunityPickId !== "";
+  // Whether the form's current selections differ from what was already
+  // saved — false only while editing existing picks and nothing's been
+  // touched yet; a fresh, never-submitted pick always counts as a change.
+  const hasChanges =
+    currentPicks === null ||
+    eliminationPickId !== currentPicks.eliminationPickId ||
+    immunityPickId !== currentPicks.immunityPickId;
 
   return (
     <div className="space-y-4">
@@ -219,7 +226,9 @@ export function WeeklyPicksModal({
               <button
                 type="submit"
                 disabled={!canSubmit}
-                className="w-full bg-primary px-3 py-2 font-medium text-black hover:opacity-90 disabled:opacity-40"
+                className={`w-full px-3 py-2 font-medium hover:opacity-90 disabled:opacity-40 ${
+                  hasChanges ? "bg-primary text-black" : "bg-black text-primary"
+                }`}
               >
                 save picks
               </button>
