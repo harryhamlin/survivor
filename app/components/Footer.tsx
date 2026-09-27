@@ -17,7 +17,7 @@ export function Footer() {
   }, [fetcher.state, fetcher.data]);
 
   return (
-    <footer className="w-full border-t border-primary/40 px-4 py-4 text-center">
+    <footer className="w-full px-4 py-4 text-center">
       <button
         type="button"
         onClick={() => setOpen(true)}
