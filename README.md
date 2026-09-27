@@ -92,11 +92,9 @@ Built with ❤️ using React Router.
 Once an episode airs, these are the tables that typically need a row added or
 updated by hand — see `db/schema.sql` for exact columns:
 
-- **episodes** — add next week's row so players can start picking it.
-- **episode_results** — add a row for the episode that just aired, and set
-  `finalized_at` once the outcome is official.
-- **episode_eliminations** — one row per contestant voted out this episode
-  (zero, one, or more).
+- **episodes**
+- **episode_results**
+- **episode_eliminations** — one row per contestant voted out
 - **episode_immunity_winners** — one row per immunity winner, tribe or
   individual depending on the episode.
 - **episode_scoring** — flip `status` to `active` (or `void` with a
