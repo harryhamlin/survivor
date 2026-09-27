@@ -51,16 +51,19 @@ export function ScoreOverviewModal({
     // A final-3 pick has no pending/void status of its own — it's simply
     // undecided (no points either way yet) until the season knows this
     // contestant's final_placement, then it's a done deal one way or the
-    // other.
-    ...finalThree.map((pick) => ({
-      key: `final-three-${pick.contestantName}`,
-      label: pick.isUltimatePick ? "Final 3 (ultimate survivor)" : "Final 3",
-      pickName: pick.contestantName,
-      status: (pick.finalPlacement === null
-        ? "pending"
-        : "active") as ScoringStatus,
-      points: pick.points,
-    })),
+    // other. Left out entirely while undecided (rather than shown as
+    // "pending" like a weekly pick) since every final-3 pick stays pending
+    // for the whole season until the finale — listing them the whole time
+    // would just be noise, not new information.
+    ...finalThree
+      .filter((pick) => pick.finalPlacement !== null)
+      .map((pick) => ({
+        key: `final-three-${pick.contestantName}`,
+        label: pick.isUltimatePick ? "Final 3 (ultimate survivor)" : "Final 3",
+        pickName: pick.contestantName,
+        status: "active" as ScoringStatus,
+        points: pick.points,
+      })),
   ];
 
   return (

@@ -57,7 +57,7 @@ export function DetailedScores({
                       reliably stay pinned to a `sticky` cell while scrolling
                       in every browser, but a box-shadow (outside the table
                       border model entirely) always travels with it. */}
-                  <th className="sticky left-0 z-10 min-w-[180px] border-b border-primary/40 bg-background px-3 py-2 text-left text-primary shadow-[1px_0_0_0_color-mix(in_oklab,var(--color-primary)_40%,transparent)]">
+                  <th className="sticky left-0 z-10 min-w-[180px] whitespace-nowrap border-b border-primary/40 bg-background px-3 py-2 text-left text-primary shadow-[1px_0_0_0_color-mix(in_oklab,var(--color-primary)_40%,transparent)]">
                     player
                   </th>
                   {/* A plain border-l here (rather than relying only on the
@@ -65,10 +65,10 @@ export function DetailedScores({
                       a visible dividing line at rest — the box-shadow exists
                       purely to survive horizontal scroll, not to double as
                       this column's left border. */}
-                  <th className="min-w-[100px] border-b border-l border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
+                  <th className="min-w-[100px] whitespace-nowrap border-b border-l border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
                     score
                   </th>
-                  <th className="min-w-[260px] border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
+                  <th className="min-w-[260px] whitespace-nowrap border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
                     final 3
                   </th>
                   {/* No min-width here (unlike the other columns) — this one
@@ -87,13 +87,13 @@ export function DetailedScores({
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.playerId}>
-                    <td className="sticky left-0 z-10 border-b border-primary/40 bg-background px-3 py-2 text-primary shadow-[1px_0_0_0_color-mix(in_oklab,var(--color-primary)_40%,transparent)]">
+                    <td className="sticky left-0 z-10 whitespace-nowrap border-b border-primary/40 bg-background px-3 py-2 text-primary shadow-[1px_0_0_0_color-mix(in_oklab,var(--color-primary)_40%,transparent)]">
                       {row.displayName}
                     </td>
-                    <td className="border-b border-l border-r border-primary/40 px-3 py-2 text-primary">
+                    <td className="whitespace-nowrap border-b border-l border-r border-primary/40 px-3 py-2 text-primary">
                       {row.score}
                     </td>
-                    <td className="border-b border-r border-primary/40 px-3 py-2 text-primary">
+                    <td className="whitespace-nowrap border-b border-r border-primary/40 px-3 py-2 text-primary">
                       {row.team.length > 0 ? (
                         // team is already ordered ultimate pick first (see
                         // the leaderboard route's query), so stacking in
