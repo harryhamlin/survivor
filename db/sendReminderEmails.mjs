@@ -71,7 +71,7 @@ const REMINDERS = [
   {
     type: "monday",
     dayOfWeek: 1,
-    hour: 10,
+    hour: 13,
     subject: "make your weekly picks",
     text: (episodeNumber) =>
       `hi
