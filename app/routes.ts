@@ -23,6 +23,7 @@ export default [
   // is about fantasy players' predictions and scores.
   route("season-results", "routes/season-results.tsx"),
   route("contestants", "routes/contestants.tsx"),
+  route("rules", "routes/rules.tsx"),
   route("account", "routes/account.tsx"),
   route("confirm-email/:token", "routes/confirm-email.tsx"),
   route("logout", "routes/logout.tsx"),

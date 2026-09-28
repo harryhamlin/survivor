@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { page: "leaderboard", to: "/leaderboard", label: "leaderboard" },
   { page: "season-results", to: "/season-results", label: "game_results" },
   { page: "contestants", to: "/contestants", label: "contestants" },
+  { page: "rules", to: "/rules", label: "rules" },
   { page: "account", to: "/account", label: "account" },
 ] as const;
 
