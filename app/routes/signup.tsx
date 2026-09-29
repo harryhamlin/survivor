@@ -2,7 +2,7 @@
 // in, the same way a fresh login would.
 import bcrypt from "bcryptjs";
 import { passwordError, readFormData, validEmail } from "../security.server";
-import { limitRequest } from "../rateLimit.server";
+import { getClientIp, limitRequest } from "../rateLimit.server";
 import type { Route } from "./+types/signup";
 import pool from "../db.server";
 import { createUserSession } from "../session.server";
@@ -46,9 +46,15 @@ export async function action({ request }: Route.ActionArgs) {
     // public standings immediately, even before its first dashboard visit.
     await getOrCreateFantasyPlayer(user.id, { displayName: name, email });
     return createUserSession(user.id, "/dashboard", passwordHash, email);
-  } catch {
+  } catch (err) {
     // Most likely cause: `email` collided with an existing account (it's
-    // UNIQUE).
+    // UNIQUE). Logged (rather than silently swallowed) so a burst of these
+    // shows up in `heroku logs` — each one burns a users_id_seq value with
+    // no row to show for it, which is otherwise invisible after the fact.
+    console.error(
+      `Signup failed for "${email}" from ${getClientIp(request)}:`,
+      err,
+    );
     return { error: "Email is already taken" };
   }
 }
