@@ -92,7 +92,7 @@ Built with ❤️ using React Router.
 Once an episode airs, these are the tables that typically need a row added or
 updated by hand — see `db/schema.sql` for exact columns:
 
-- **episodes**
+- **episodes** - update to individual after merge
 - **episode_results**
 - **episode_eliminations** — one row per contestant voted out
 - **episode_immunity_winners** — one row per immunity winner, tribe or
