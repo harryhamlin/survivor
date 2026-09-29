@@ -3,7 +3,12 @@
 import bcrypt from "bcryptjs";
 import { data } from "react-router";
 import { readFormData } from "../security.server";
-import { accountKey, isRateLimited, limitRequest } from "../rateLimit.server";
+import {
+  accountKey,
+  getClientIp,
+  isRateLimited,
+  limitRequest,
+} from "../rateLimit.server";
 
 import type { Route } from "./+types/login";
 import pool from "../db.server";
@@ -29,6 +34,9 @@ export async function action({ request }: Route.ActionArgs) {
   const password = String(formData.get("password") ?? "");
 
   if (await isRateLimited(`login:account:${accountKey(email)}`, 10, 15 * 60_000)) {
+    console.error(
+      `Login rate-limited for "${email}" from ${getClientIp(request)}`,
+    );
     return data({ error: "Too many attempts. Please try again later." }, {
       status: 429, headers: { "Retry-After": "900" },
     });
@@ -45,6 +53,9 @@ export async function action({ request }: Route.ActionArgs) {
   const valid = await bcrypt.compare(password, user?.password_hash ?? DUMMY_HASH);
 
   if (!valid || !user) {
+    console.error(
+      `Login failed for "${email}" from ${getClientIp(request)}`,
+    );
     return { error: "Invalid email or password" };
   }
 
