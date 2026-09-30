@@ -31,6 +31,12 @@ export function SeasonResults({
   displayName: string;
   episodes: Episode[];
 }) {
+  // Episodes arrive in episode-number order; show only the next pending one.
+  const nextPendingEpisode = episodes.find((episode) => !episode.finalized);
+  const visibleEpisodes = episodes.filter(
+    (episode) => episode.finalized || episode === nextPendingEpisode,
+  );
+
   return (
     <main className="min-h-screen bg-background">
       <TopBanner displayName={displayName} page="season-results" />
@@ -43,7 +49,7 @@ export function SeasonResults({
           <p className="text-primary/70">No episodes yet.</p>
         ) : (
           <ul className="space-y-4">
-            {episodes.map((episode) => (
+            {visibleEpisodes.map((episode) => (
               <li
                 key={episode.episodeNumber}
                 className="space-y-1 border border-primary/40 p-4"
