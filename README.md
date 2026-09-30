@@ -36,6 +36,14 @@ Your application will be available at `http://localhost:5173`.
 
 ## Building for Production
 
+### Search engine sitemap
+
+`public/sitemap.xml` lists public content pages using the production origin
+`https://torchsnuffers.com`. `public/robots.txt` advertises the sitemap to crawlers.
+Currently only the homepage is included: game detail pages require login, and
+authentication/account forms are omitted. Add URLs when new public content pages
+are introduced, and update both files if the production domain changes.
+
 Create a production build:
 
 ```bash
