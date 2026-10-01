@@ -12,8 +12,8 @@ const HEADSHOTS_DIR = path.join(process.cwd(), "public", "headshots");
 // for the cases where that isn't just a spaces-and-case difference (e.g. a
 // nickname on the file itself) — add to this as more mismatches turn up.
 const NAME_ALIASES: Record<string, string> = {
-  Michael: "mike",
-  Deven: "devin",
+  michael: "mike",
+  deven: "devin",
 };
 
 function normalize(value: string): string {
@@ -39,7 +39,8 @@ function buildHeadshotIndex(): Map<string, string> {
 const headshotIndex = buildHeadshotIndex();
 
 export function getHeadshotUrl(contestantName: string): string | null {
-  const key = normalize(NAME_ALIASES[contestantName] ?? contestantName);
+  const normalizedName = normalize(contestantName);
+  const key = NAME_ALIASES[normalizedName] ?? normalizedName;
   const file = headshotIndex.get(key);
   return file ? `/headshots/${encodeURIComponent(file)}` : null;
 }
