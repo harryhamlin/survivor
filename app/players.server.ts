@@ -6,8 +6,8 @@ import pool from "./db.server";
 export type FantasyPlayer = { id: number; displayName: string };
 
 // Ensures a fantasy_players row exists for this login, creating one on
-// first use. Called right after signup, and defensively on every dashboard
-// visit so a login that predates fantasy_players (e.g. a seeded account)
+// first use. Called defensively on every dashboard visit so a login that
+// predates fantasy_players (e.g. a seeded account)
 // still gets one. `ON CONFLICT (user_id)` is what makes this idempotent —
 // user_id is UNIQUE on fantasy_players (see db/schema.sql), so a repeat call
 // just returns the existing row instead of erroring or duplicating it.

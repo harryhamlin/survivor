@@ -65,12 +65,6 @@ export function LoginForm({ error }: { error?: string }) {
             </button>
           </Form>
           <p className="text-center text-sm text-primary/70">
-            Need an account?{" "}
-            <Link to="/signup" className="underline">
-              Sign up
-            </Link>
-          </p>
-          <p className="text-center text-sm text-primary/70">
             <Link to="/forgot-password" className="underline">
               Forgot password?
             </Link>

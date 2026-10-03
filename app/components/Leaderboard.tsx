@@ -66,12 +66,6 @@ export function Leaderboard({
             >
               log in
             </Link>
-            <p className="text-center text-sm text-primary/70">
-              Need an account?{" "}
-              <Link to="/signup" className="underline">
-                sign up
-              </Link>
-            </p>
           </div>
         )}
       </div>

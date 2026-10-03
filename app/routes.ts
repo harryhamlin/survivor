@@ -10,7 +10,6 @@ export default [
   // own real path avoids that entirely.
   index("routes/home.tsx"),
   route("login", "routes/login.tsx"),
-  route("signup", "routes/signup.tsx"),
   route("forgot-password", "routes/forgot-password.tsx"),
   route("reset-password/:token", "routes/reset-password.tsx"),
   route("dashboard", "routes/dashboard.tsx"),
