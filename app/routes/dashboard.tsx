@@ -461,17 +461,17 @@ export default function Dashboard({
             actionData?.intent === "create-team" ? actionData : undefined
           }
         />
-        <div className="space-y-1 text-center text-sm text-primary/70">
-          <p>
-            {isDraftLocked
-              ? hasTeam
-                ? `Your team locked ${draftLockLabel} and can no longer be changed.`
-                : `Team selection closed ${draftLockLabel} — you didn't pick a team in time.`
-              : draftLockLabel
-                ? `You can change your final ${loaderData.season.finalistCount} until ${draftLockLabel}, after which it locks for all eternity.`
-                : "The draft lock time hasn't been set yet."}
-          </p>
-        </div>
+        {!(isDraftLocked && hasTeam) && (
+          <div className="space-y-1 text-center text-sm text-primary/70">
+            <p>
+              {isDraftLocked
+                ? `Team selection closed ${draftLockLabel} — you didn't pick a team in time.`
+                : draftLockLabel
+                  ? `You can change your final ${loaderData.season.finalistCount} until ${draftLockLabel}, after which it locks for all eternity.`
+                  : "The draft lock time hasn't been set yet."}
+            </p>
+          </div>
+        )}
         <ScoreOverviewModal
           weeklyPicks={scoreBreakdown.weeklyPicks}
           finalThree={scoreBreakdown.finalThree}

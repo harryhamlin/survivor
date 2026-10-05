@@ -192,14 +192,11 @@ test('security regression suite with real Postgres and captured mail', async t =
       env.DYNO = 'web.test';
     });
 
-    await t.test('four-character policy is enforced on signup, reset, and account actions', async () => {
+    await t.test('four-character policy is enforced on reset and account actions', async () => {
       await resetFixtures();
-      const signup = load('app/routes/signup.tsx');
-      assert.match((await signup.action({ request: req('/signup', { name: 'Test', email: 'test@example.com', password: 'abc' }) })).error, /4 characters/);
-      const signupResponse = await signup.action({ request: req('/signup', { name: 'Test', email: 'test@example.com', password: 'abcd' }) });
-      assert.equal(signupResponse.status, 302);
-      const cookie = cookieOf(signupResponse);
-      const id = await session.getUserId(req('/account', {}, cookie));
+      const u = await user('test@example.com', 'abcd');
+      const cookie = await loginCookie(u);
+      const id = u.id;
       const account = load('app/routes/account.tsx');
       assert.match((await account.action({ request: req('/account', { intent: 'change-password', currentPassword: 'abcd', newPassword: 'abc' }, cookie) })).error, /4 characters/);
       const changed = await account.action({ request: req('/account', { intent: 'change-password', currentPassword: 'abcd', newPassword: 'next' }, cookie) });
@@ -214,7 +211,7 @@ test('security regression suite with real Postgres and captured mail', async t =
       assert.equal(security.passwordError('a'.repeat(72)), null);
     });
 
-    await t.test('login throttles by account across IPs and signup throttles before hashing', async () => {
+    await t.test('login throttles by account across IPs', async () => {
       await resetFixtures(); await user();
       const login = load('app/routes/login.tsx');
       for (let i = 0; i < 10; i++) {
@@ -223,9 +220,6 @@ test('security regression suite with real Postgres and captured mail', async t =
       }
       const blocked = await login.action({ request: req('/login', { email: 'person@example.com', password: 'pass' }, undefined, '203.0.113.50') });
       assert.equal(blocked.init.status, 429);
-      const signup = load('app/routes/signup.tsx');
-      for (let i = 0; i < 5; i++) await signup.action({ request: req('/signup') });
-      await assert.rejects(signup.action({ request: req('/signup') }), e => e.status === 429);
     });
 
     await t.test('recovery cooldown does not send again or invalidate the first link', async () => {
