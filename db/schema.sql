@@ -131,8 +131,12 @@ CREATE TABLE IF NOT EXISTS reminder_emails_sent (
   reminder_type TEXT NOT NULL
     CHECK (reminder_type IN ('monday', 'wednesday_morning', 'wednesday_last_chance')),
   sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  player_ids INTEGER[],
   PRIMARY KEY (episode_id, reminder_type)
 );
+
+-- Historical reminders have unknown recipients; new sends record their IDs.
+ALTER TABLE reminder_emails_sent ADD COLUMN IF NOT EXISTS player_ids INTEGER[];
 
 CREATE TABLE IF NOT EXISTS episode_results (
   episode_id INTEGER PRIMARY KEY REFERENCES episodes(id),

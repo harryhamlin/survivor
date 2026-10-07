@@ -163,7 +163,7 @@ if (alreadySent.length > 0) {
 // Everyone who hasn't submitted a pick for this episode yet and hasn't
 // turned off email notifications (see the account page's toggle).
 const { rows: pendingPlayers } = await pool.query(
-  `SELECT u.email FROM fantasy_players fp
+  `SELECT fp.id, u.email FROM fantasy_players fp
    JOIN users u ON u.id = fp.user_id
    WHERE u.email_notifications
    AND NOT EXISTS (
@@ -173,18 +173,20 @@ const { rows: pendingPlayers } = await pool.query(
   [episode.id],
 );
 
-for (const { email } of pendingPlayers) {
+const sentPlayerIds = [];
+for (const { id, email } of pendingPlayers) {
   await sendEmail({
     to: email,
     subject: reminder.subject,
     text: reminder.text(episode.episode_number),
   });
+  sentPlayerIds.push(id);
   console.log(`Sent "${reminder.type}" reminder to ${email}`);
 }
 
 await pool.query(
-  `INSERT INTO reminder_emails_sent (episode_id, reminder_type) VALUES ($1, $2)`,
-  [episode.id, reminder.type],
+  `INSERT INTO reminder_emails_sent (episode_id, reminder_type, player_ids) VALUES ($1, $2, $3)`,
+  [episode.id, reminder.type, sentPlayerIds],
 );
 console.log(
   `Sent ${pendingPlayers.length} "${reminder.type}" reminder(s) for episode ${episode.episode_number}.`,
