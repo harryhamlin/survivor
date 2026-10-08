@@ -122,7 +122,7 @@ export function DetailedScores({
                             >
                               {name}
                               {name === row.ultimatePick && (
-                                <span className="text-primary/70">
+                                <span className={eliminated ? "text-red-500" : "text-primary/70"}>
                                   {" "}
                                   (ultimate survivor)
                                 </span>
