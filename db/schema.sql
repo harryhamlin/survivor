@@ -187,6 +187,13 @@ CREATE TABLE IF NOT EXISTS episode_scoring (
 -- Formula-based metrics are stored values, allowing imported source statistics.
 CREATE TABLE IF NOT EXISTS survivor_stats (
   id SERIAL PRIMARY KEY,
+  player_id INTEGER,
+  season_number INTEGER,
+  contestant_name TEXT,
+  sex TEXT,
+  birth_date DATE,
+  filming_start_date DATE,
+  age_at_filming NUMERIC,
   survival_average NUMERIC,
   survival_score NUMERIC,
   score_without_jury NUMERIC,
@@ -195,8 +202,8 @@ CREATE TABLE IF NOT EXISTS survivor_stats (
   challenge_win_percent NUMERIC,
   challenge_sit_outs INTEGER,
   mean_percent_finish NUMERIC,
-  individual_reward_appearances INTEGER,
-  individual_reward_wins INTEGER,
+  individual_reward_appearances NUMERIC,
+  individual_reward_wins NUMERIC,
   individual_immunity_appearances INTEGER,
   individual_immunity_wins INTEGER,
   individual_challenge_appearances INTEGER,
@@ -232,12 +239,19 @@ CREATE TABLE IF NOT EXISTS survivor_stats (
   jury_votes_received INTEGER,
   total_jury_votes INTEGER,
   jury_vote_percent NUMERIC,
-  days_played INTEGER,
+  days_played NUMERIC,
   finish_position INTEGER,
   times_played INTEGER,
   exile_days_played INTEGER
 );
 
+COMMENT ON COLUMN survivor_stats.player_id IS 'PID: Source player identifier, shared across season appearances; not a foreign key.';
+COMMENT ON COLUMN survivor_stats.season_number IS 'Season: Source season number; not a foreign key.';
+COMMENT ON COLUMN survivor_stats.contestant_name IS 'contestant: Contestant name as supplied by the source, including any annotations.';
+COMMENT ON COLUMN survivor_stats.sex IS 'Sex: Source sex designation, including M, F, or NB; source casing preserved.';
+COMMENT ON COLUMN survivor_stats.birth_date IS 'Birthday: Contestant birth date.';
+COMMENT ON COLUMN survivor_stats.filming_start_date IS 'Day 1 Filming date: First day of filming for this appearance.';
+COMMENT ON COLUMN survivor_stats.age_at_filming IS 'Age: Age at filming as supplied, including fractional years; not recalculated.';
 COMMENT ON COLUMN survivor_stats.survival_average IS 'SurvAv: Challenge wins + weighted Tribal Council ratio + (6 * jury vote percent).';
 COMMENT ON COLUMN survivor_stats.survival_score IS 'SurvSc: Challenge win percent + Tribal Council success percent + jury vote percent; maximum 3.';
 COMMENT ON COLUMN survivor_stats.score_without_jury IS 'NoJ: Challenge wins + weighted Tribal Council ratio.';
