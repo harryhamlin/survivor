@@ -29,6 +29,7 @@ const pool = new pg.Pool({
 // table is already there — this is the only way to tell, per table, whether
 // this run actually built it or found it already in place.
 const TABLES = [
+  "survivor_stats",
   "users",
   "password_reset_tokens",
   "user_sessions",
