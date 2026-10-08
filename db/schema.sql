@@ -96,13 +96,6 @@ CREATE TABLE IF NOT EXISTS episodes (
   UNIQUE (season_id, episode_number)
 );
 
-CREATE TABLE IF NOT EXISTS contestant_episode_tribes (
-  episode_id INTEGER NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
-  contestant_id INTEGER NOT NULL REFERENCES contestants(id),
-  tribe_id INTEGER NOT NULL REFERENCES tribes(id),
-  PRIMARY KEY (episode_id, contestant_id)
-);
-
 CREATE TABLE IF NOT EXISTS draft_picks (
   season_id INTEGER NOT NULL REFERENCES seasons(id),
   player_id INTEGER NOT NULL REFERENCES fantasy_players(id),
@@ -302,30 +295,22 @@ COMMENT ON COLUMN survivor_stats.finish_position IS 'Finish: Final placement, st
 COMMENT ON COLUMN survivor_stats.times_played IS 'Time: Ordinal season played by the player: 1 for their first, 2 for their second, and so on.';
 COMMENT ON COLUMN survivor_stats.exile_days_played IS 'Exile: Days technically in-game but outside the regular game, including Exile, Redemption, Ghost Island, or Edge of Extinction.';
 
--- Historical tribe rosters link only to contestant appearances in survivor_stats.
+-- Historical tribe rosters store contestant appearance IDs from survivor_stats.
 -- Each row describes one tribe roster over an inclusive episode range.
 CREATE TABLE IF NOT EXISTS tribal_episodes (
   id SERIAL PRIMARY KEY,
   tribe_name TEXT NOT NULL CHECK (btrim(tribe_name) <> ''),
+  contestants INTEGER[] NOT NULL DEFAULT '{}',
   episode_start INTEGER NOT NULL CHECK (episode_start >= 1),
   episode_end INTEGER NOT NULL CHECK (episode_end >= episode_start),
   challenge_wins NUMERIC CHECK (challenge_wins >= 0)
 );
 
--- A roster can contain multiple contestants; use foreign keys rather than ID arrays.
-CREATE TABLE IF NOT EXISTS tribal_episode_contestants (
-  tribal_episode_id INTEGER NOT NULL REFERENCES tribal_episodes(id) ON DELETE CASCADE,
-  survivor_stats_id INTEGER NOT NULL REFERENCES survivor_stats(id),
-  PRIMARY KEY (tribal_episode_id, survivor_stats_id)
-);
-CREATE INDEX IF NOT EXISTS tribal_episode_contestants_survivor_stats_id
-  ON tribal_episode_contestants (survivor_stats_id);
-
 COMMENT ON COLUMN tribal_episodes.tribe_name IS 'Tribe name for this roster and episode range.';
 COMMENT ON COLUMN tribal_episodes.episode_start IS 'First episode in which this roster is valid, inclusive.';
 COMMENT ON COLUMN tribal_episodes.episode_end IS 'Last episode in which this roster is valid, inclusive.';
 COMMENT ON COLUMN tribal_episodes.challenge_wins IS 'Tribe challenge wins over this episode range; NULL means unknown.';
-COMMENT ON COLUMN tribal_episode_contestants.survivor_stats_id IS 'Contestant season appearance in survivor_stats; use the row ID rather than the returning-player PID.';
+COMMENT ON COLUMN tribal_episodes.contestants IS 'Array of survivor_stats row IDs for contestant season appearances, not returning-player PIDs. Array elements are not enforced by foreign keys.';
 
 DO $$
 DECLARE

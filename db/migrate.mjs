@@ -31,7 +31,6 @@ const pool = new pg.Pool({
 const TABLES = [
   "survivor_stats",
   "tribal_episodes",
-  "tribal_episode_contestants",
   "users",
   "password_reset_tokens",
   "user_sessions",
