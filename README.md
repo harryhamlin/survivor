@@ -103,6 +103,12 @@ updated by hand — see `db/schema.sql` for exact columns:
 - **episodes** - update to individual after merge
 - **episode_results**
 - **episode_eliminations** — one row per contestant voted out
+  (including departures that award no prediction points). Set
+  `counts_for_scoring = false` on a departure that should award no weekly
+  elimination points; leave it `true` for the legitimate vote-out in the
+  same episode. Both contestants still appear eliminated and reduce the
+  remaining contestant count for later episodes. Keep the episode's
+  elimination scoring `active` to award points for the legitimate vote-out.
 - **episode_immunity_winners** — one row per immunity winner, tribe or
   individual depending on the episode.
 - **episode_scoring** — flip `status` to `active` (or `void` with a

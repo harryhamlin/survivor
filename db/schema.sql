@@ -146,8 +146,12 @@ CREATE TABLE IF NOT EXISTS episode_results (
 CREATE TABLE IF NOT EXISTS episode_eliminations (
   episode_id INTEGER NOT NULL REFERENCES episode_results(episode_id) ON DELETE CASCADE,
   contestant_id INTEGER NOT NULL REFERENCES contestants(id),
+  counts_for_scoring BOOLEAN NOT NULL DEFAULT true,
   PRIMARY KEY (episode_id, contestant_id)
 );
+
+ALTER TABLE episode_eliminations
+  ADD COLUMN IF NOT EXISTS counts_for_scoring BOOLEAN NOT NULL DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS episode_immunity_winners (
   id SERIAL PRIMARY KEY,

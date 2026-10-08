@@ -102,6 +102,7 @@ export type EpisodeScoringInfo = {
   episodeNumber: number;
   immunityType: "tribe" | "individual";
   eliminationWinners: number[];
+  eliminatedContestants: number[];
   eliminationStatus: ScoringStatus;
   immunityWinners: number[];
   immunityStatus: ScoringStatus;
@@ -127,6 +128,7 @@ export async function getEpisodeScoringInfo(
       episodeNumber: row.episode_number as number,
       immunityType: row.immunity_type as "tribe" | "individual",
       eliminationWinners: [],
+      eliminatedContestants: [],
       eliminationStatus: "pending",
       immunityWinners: [],
       immunityStatus: "pending",
@@ -136,14 +138,17 @@ export async function getEpisodeScoringInfo(
   // Zero, one, or many rows per episode — see episode_eliminations in
   // db/schema.sql.
   const { rows: eliminationRows } = await pool.query(
-    `SELECT episode_id, contestant_id FROM episode_eliminations
+    `SELECT episode_id, contestant_id, counts_for_scoring FROM episode_eliminations
      WHERE episode_id IN (SELECT id FROM episodes WHERE season_id = $1)`,
     [seasonId],
   );
   for (const row of eliminationRows) {
-    infoByEpisodeId
-      .get(row.episode_id as number)
-      ?.eliminationWinners.push(row.contestant_id as number);
+    const info = infoByEpisodeId.get(row.episode_id as number);
+    if (!info) continue;
+    info.eliminatedContestants.push(row.contestant_id as number);
+    if (row.counts_for_scoring) {
+      info.eliminationWinners.push(row.contestant_id as number);
+    }
   }
 
   // Also zero, one, or many rows per episode — exactly one of tribe_id/
@@ -234,7 +239,7 @@ async function getRemainingCountByEpisodeId(
   let remaining = totalContestants as number;
   for (const [episodeId, info] of episodesInOrder) {
     remainingCountByEpisodeId.set(episodeId, remaining);
-    remaining -= info.eliminationWinners.length;
+    remaining -= info.eliminatedContestants.length;
   }
   return remainingCountByEpisodeId;
 }
