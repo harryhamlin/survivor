@@ -96,6 +96,13 @@ CREATE TABLE IF NOT EXISTS episodes (
   UNIQUE (season_id, episode_number)
 );
 
+CREATE TABLE IF NOT EXISTS contestant_episode_tribes (
+  episode_id INTEGER NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+  contestant_id INTEGER NOT NULL REFERENCES contestants(id),
+  tribe_id INTEGER NOT NULL REFERENCES tribes(id),
+  PRIMARY KEY (episode_id, contestant_id)
+);
+
 CREATE TABLE IF NOT EXISTS draft_picks (
   season_id INTEGER NOT NULL REFERENCES seasons(id),
   player_id INTEGER NOT NULL REFERENCES fantasy_players(id),
@@ -299,6 +306,8 @@ COMMENT ON COLUMN survivor_stats.exile_days_played IS 'Exile: Days technically i
 -- Each row describes one tribe roster over an inclusive episode range.
 CREATE TABLE IF NOT EXISTS tribal_episodes (
   id SERIAL PRIMARY KEY,
+  season_number INTEGER,
+  name_reference TEXT,
   tribe_name TEXT NOT NULL CHECK (btrim(tribe_name) <> ''),
   contestants INTEGER[] NOT NULL DEFAULT '{}',
   episode_start INTEGER NOT NULL CHECK (episode_start >= 1),
@@ -306,6 +315,29 @@ CREATE TABLE IF NOT EXISTS tribal_episodes (
   challenge_wins NUMERIC CHECK (challenge_wins >= 0)
 );
 
+-- Existing installations keep their roster data when these fields are added.
+ALTER TABLE tribal_episodes
+  ADD COLUMN IF NOT EXISTS season_number INTEGER,
+  ADD COLUMN IF NOT EXISTS name_reference TEXT;
+
+-- Infer a season only when every roster member resolves to the same season.
+WITH roster_seasons AS (
+  SELECT t.id, min(s.season_number) AS season_number
+  FROM tribal_episodes t
+  CROSS JOIN LATERAL unnest(t.contestants) AS member(stats_id)
+  LEFT JOIN survivor_stats s ON s.id = member.stats_id
+  WHERE t.season_number IS NULL
+  GROUP BY t.id
+  HAVING count(*) = count(s.season_number)
+    AND count(DISTINCT s.season_number) = 1
+)
+UPDATE tribal_episodes t
+SET season_number = r.season_number
+FROM roster_seasons r
+WHERE t.id = r.id;
+
+COMMENT ON COLUMN tribal_episodes.season_number IS 'Survivor season number for this roster; not a foreign key to the app seasons table.';
+COMMENT ON COLUMN tribal_episodes.name_reference IS 'Optional readable reference label for this roster.';
 COMMENT ON COLUMN tribal_episodes.tribe_name IS 'Tribe name for this roster and episode range.';
 COMMENT ON COLUMN tribal_episodes.episode_start IS 'First episode in which this roster is valid, inclusive.';
 COMMENT ON COLUMN tribal_episodes.episode_end IS 'Last episode in which this roster is valid, inclusive.';

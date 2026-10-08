@@ -42,7 +42,7 @@ try {
   if(targetIds.size)await client.query('DELETE FROM tribal_episodes WHERE id=ANY($1::int[])',[[...targetIds]]);
   const inserted=[];
   for(const r of prepared){
-   const result=await client.query('INSERT INTO tribal_episodes (tribe_name,episode_start,episode_end,challenge_wins,contestants) VALUES ($1,$2,$3,$4,$5::int[]) RETURNING *',[r.tribe_name,r.episode_start,r.episode_end,r.challenge_wins,r.ids]);
+   const result=await client.query('INSERT INTO tribal_episodes (tribe_name,episode_start,episode_end,challenge_wins,contestants,season_number,name_reference) VALUES ($1,$2,$3,$4,$5::int[],$6,$7) RETURNING *',[r.tribe_name,r.episode_start,r.episode_end,r.challenge_wins,r.ids,plan.season_number,r.name_reference ?? null]);
    const id=result.rows[0].id;
    inserted.push({...result.rows[0],ids:[...r.ids].sort((a,b)=>a-b)});
   }
@@ -54,7 +54,7 @@ try {
   for(const expected of inserted){
    const actual=after.rows.find(r=>r.id===expected.id);
    const links=[...actual.contestants].sort((a,b)=>a-b);
-   if(!actual||actual.tribe_name!==expected.tribe_name||actual.episode_start!==expected.episode_start||actual.episode_end!==expected.episode_end||Number(actual.challenge_wins)!==Number(expected.challenge_wins)||JSON.stringify(links)!==JSON.stringify(expected.ids))throw new Error('Readback mismatch');
+   if(!actual||actual.season_number!==plan.season_number||actual.name_reference!==expected.name_reference||actual.tribe_name!==expected.tribe_name||actual.episode_start!==expected.episode_start||actual.episode_end!==expected.episode_end||Number(actual.challenge_wins)!==Number(expected.challenge_wins)||JSON.stringify(links)!==JSON.stringify(expected.ids))throw new Error('Readback mismatch');
   }
   await client.query('COMMIT');
   console.log(JSON.stringify({season:49,rosters:inserted.length,contestantLinks:inserted.reduce((n,r)=>n+r.ids.length,0),survivorStatsUnchanged:true,otherSeasonsUnchanged:true}));
