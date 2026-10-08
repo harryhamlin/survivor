@@ -30,6 +30,8 @@ const pool = new pg.Pool({
 // this run actually built it or found it already in place.
 const TABLES = [
   "survivor_stats",
+  "tribal_episodes",
+  "tribal_episode_contestants",
   "users",
   "password_reset_tokens",
   "user_sessions",
