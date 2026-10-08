@@ -4,7 +4,7 @@ import type { Route } from "./+types/home";
 import pool from "../db.server";
 import { getUserId } from "../session.server";
 import { getCurrentSeason } from "../season.server";
-import { getSeasonScores } from "../scoring.server";
+import { getSeasonScores, getSeasonMaxPossibleScores } from "../scoring.server";
 import { Leaderboard } from "../components/Leaderboard";
 
 export function meta({}: Route.MetaArgs) {
@@ -25,6 +25,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const scores = await getSeasonScores(season.id, season.finalistCount);
   const scoreByPlayerId = new Map(scores.map((s) => [s.playerId, s.score]));
+  const maxByPlayerId = await getSeasonMaxPossibleScores(season.id, season.finalistCount);
 
   const playersResult = await pool.query(
     `SELECT fp.id AS player_id, u.name, u.email
@@ -38,8 +39,10 @@ export async function loader({ request }: Route.LoaderArgs) {
       // back to email only for a legacy/seeded account with no name set.
       name: (row.name as string | null) ?? (row.email as string),
       score: scoreByPlayerId.get(row.player_id as number) ?? 0,
+      maxPossibleScore: maxByPlayerId.get(row.player_id as number) ?? 0,
     }))
-    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+    .sort((a, b) => b.score - a.score || b.maxPossibleScore - a.maxPossibleScore ||
+      a.name.localeCompare(b.name));
 
   return { standings, isLoggedIn: userId !== null };
 }

@@ -13,6 +13,147 @@ import pool from "./db.server";
 
 export type PlayerScore = { playerId: number; score: number };
 
+type MaxContestant = { id: number; finalPlacement: number | null; eliminated: boolean };
+type MaxDraftPick = { playerId: number; contestantId: number; isUltimatePick: boolean };
+type MaxWeeklyPick = {
+  playerId: number;
+  episodeId: number;
+  eliminationPickId: number | null;
+  immunityPickId: number | null;
+};
+type MaxEpisode = EpisodeScoringInfo & {
+  id: number;
+  picksOpen: boolean;
+  hasResults: boolean;
+};
+
+// A projection through the finalists: one boot per unknown round, with
+// individual immunity in rounds not yet entered in the episode schedule.
+export function calculateMaxPossibleScores(
+  playerIds: number[],
+  contestants: MaxContestant[],
+  drafts: MaxDraftPick[],
+  picks: MaxWeeklyPick[],
+  episodes: MaxEpisode[],
+  finalistCount: number,
+  seasonComplete: boolean,
+): Map<number, number> {
+  const byContestant = new Map(contestants.map((c) => [c.id, c]));
+  const knownFinalists = contestants.filter(
+    (c) => c.finalPlacement !== null && c.finalPlacement <= finalistCount,
+  ).length;
+  const finalistSlots = Math.max(0, finalistCount - knownFinalists);
+  const winnerKnown = contestants.some((c) => c.finalPlacement === 1);
+  const orderedEpisodes = [...episodes].sort((a, b) => a.episodeNumber - b.episodeNumber);
+  const draftByPlayer = new Map<number, MaxDraftPick[]>();
+  for (const draft of drafts) {
+    const team = draftByPlayer.get(draft.playerId) ?? [];
+    team.push(draft);
+    draftByPlayer.set(draft.playerId, team);
+  }
+  const pickByPlayerEpisode = new Map(
+    picks.map((p) => [`${p.playerId}:${p.episodeId}`, p]),
+  );
+  return new Map(playerIds.map((playerId) => {
+    let total = 0;
+    let potentialFinalists = 0;
+    let potentialWinner = false;
+    for (const draft of draftByPlayer.get(playerId) ?? []) {
+      const contestant = byContestant.get(draft.contestantId);
+      if (!contestant) continue;
+      total += scoreFinalThreePick({
+        finalPlacement: contestant.finalPlacement,
+        isUltimatePick: draft.isUltimatePick,
+      }, finalistCount);
+      if (!seasonComplete && !contestant.eliminated && contestant.finalPlacement === null) {
+        potentialFinalists++;
+        if (draft.isUltimatePick && !winnerKnown) potentialWinner = true;
+      }
+    }
+    total += 4 * Math.min(potentialFinalists, finalistSlots);
+    if (potentialWinner && finalistSlots > 0) total += 4;
+
+    let remaining = contestants.length;
+    let projectedBoots = 0;
+    const alreadyOut = new Set<number>();
+    for (const episode of orderedEpisodes) {
+      const pick = pickByPlayerEpisode.get(`${playerId}:${episode.id}`);
+      const projectedRemaining = Math.max(finalistCount, remaining - projectedBoots);
+      const eliminationPoints = Math.ceil(
+        (episode.picksOpen ? projectedRemaining : remaining) / 4,
+      );
+      const immunityPoints = episode.immunityType === 'individual' ? 3 : 1;
+      const potential = (
+        status: ScoringStatus,
+        prediction: number | null,
+        winners: number[],
+        points: number,
+        isElimination: boolean,
+      ) => {
+        if (status !== 'pending') return scorePrediction(status, prediction, winners, points) ?? 0;
+        if (seasonComplete) return 0;
+        if (episode.picksOpen) {
+          if (!episode.hasResults && projectedRemaining <= finalistCount) return 0;
+          return episode.hasResults && winners.length === 0 ? 0 : points;
+        }
+        if (prediction === null) return 0;
+        if (episode.hasResults) return winners.includes(prediction) ? points : 0;
+        if ((isElimination || episode.immunityType === 'individual') &&
+            (!byContestant.has(prediction) || alreadyOut.has(prediction))) return 0;
+        return points;
+      };
+      total += potential(episode.eliminationStatus, pick?.eliminationPickId ?? null,
+        episode.eliminationWinners, eliminationPoints, true);
+      total += potential(episode.immunityStatus, pick?.immunityPickId ?? null,
+        episode.immunityWinners, immunityPoints, false);
+      for (const id of episode.eliminatedContestants) alreadyOut.add(id);
+      remaining -= episode.eliminatedContestants.length;
+      if (!episode.hasResults && (episode.eliminationStatus === 'pending' || episode.picksOpen) &&
+          remaining - projectedBoots > finalistCount) projectedBoots++;
+    }
+    if (!seasonComplete) {
+      for (let count = remaining - projectedBoots; count > finalistCount; count--) {
+        total += Math.ceil(count / 4) + 3;
+      }
+    }
+    return [playerId, total];
+  }));
+}
+
+export async function getSeasonMaxPossibleScores(
+  seasonId: number,
+  finalistCount: number,
+): Promise<Map<number, number>> {
+  const info = await getEpisodeScoringInfo(seasonId);
+  const [players, contestants, drafts, picks, episodes, season] = await Promise.all([
+    pool.query('SELECT id FROM fantasy_players'),
+    pool.query(`SELECT c.id, c.final_placement, EXISTS (
+      SELECT 1 FROM episode_eliminations ee WHERE ee.contestant_id = c.id
+    ) AS eliminated FROM contestants c WHERE c.season_id = $1`, [seasonId]),
+    pool.query('SELECT player_id, contestant_id, is_ultimate_pick FROM draft_picks WHERE season_id = $1', [seasonId]),
+    pool.query(`SELECT wp.player_id, wp.episode_id, wp.elimination_pick_id,
+      CASE WHEN e.immunity_type = 'individual' THEN wp.immunity_contestant_pick_id
+      ELSE wp.immunity_tribe_pick_id END AS immunity_pick_id
+      FROM weekly_picks wp JOIN episodes e ON e.id = wp.episode_id
+      WHERE e.season_id = $1`, [seasonId]),
+    pool.query(`SELECT e.id, e.picks_lock_at > now() AS picks_open,
+      EXISTS (SELECT 1 FROM episode_results er WHERE er.episode_id = e.id) AS has_results
+      FROM episodes e WHERE e.season_id = $1`, [seasonId]),
+    pool.query('SELECT status FROM seasons WHERE id = $1', [seasonId]),
+  ]);
+  return calculateMaxPossibleScores(
+    players.rows.map((r) => r.id as number),
+    contestants.rows.map((r) => ({ id: r.id, finalPlacement: r.final_placement, eliminated: r.eliminated })),
+    drafts.rows.map((r) => ({ playerId: r.player_id, contestantId: r.contestant_id, isUltimatePick: r.is_ultimate_pick })),
+    picks.rows.map((r) => ({ playerId: r.player_id, episodeId: r.episode_id,
+      eliminationPickId: r.elimination_pick_id, immunityPickId: r.immunity_pick_id })),
+    episodes.rows.map((r) => ({ ...info.get(r.id)!, id: r.id,
+      picksOpen: r.picks_open, hasResults: r.has_results })),
+    finalistCount,
+    season.rows[0]?.status === 'complete',
+  );
+}
+
 type DraftPick = {
   finalPlacement: number | null;
   isUltimatePick: boolean;

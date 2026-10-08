@@ -119,6 +119,17 @@ updated by hand — see `db/schema.sql` for exact columns:
   `idols`/`advantages`/`shot_in_the_dark` as those change.
 
 
+## Maximum possible score
+
+The leaderboard's **max possible score** is the projected season total,
+including earned points, eligible pending locked picks, surviving Final 3
+picks, and perfect future weekly picks. Missed locked picks and void scoring
+categories add no points. Unknown rounds assume one departure per round until
+`finalist_count` remain, using scheduled immunity types where available and
+individual immunity beyond the entered schedule. Future double departures or
+rounds without immunity can change this projection. Tied current scores keep
+the same leaderboard rank and sort by maximum score, highest first.
+
 ## Authentication security and deployment
 
 Run `npm run db:migrate` **before** starting this version. Heroku already runs

@@ -9,6 +9,7 @@ import { getCurrentSeason } from "../season.server";
 import { getOrCreateFantasyPlayer } from "../players.server";
 import {
   getSeasonScores,
+  getSeasonMaxPossibleScores,
   getEpisodeScoringInfo,
   isPredictionCorrect,
   getPlayerScoreBreakdown,
@@ -58,6 +59,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const scores = await getSeasonScores(season.id, season.finalistCount);
   const scoreByPlayerId = new Map(scores.map((s) => [s.playerId, s.score]));
+  const maxByPlayerId = await getSeasonMaxPossibleScores(season.id, season.finalistCount);
 
   // One row per fantasy player, with their draft's contestants
   // pre-aggregated into an array (ultimate pick first) plus that pick called
@@ -197,6 +199,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         playerId,
         displayName: rowDisplayName,
         score: scoreByPlayerId.get(playerId) ?? 0,
+        maxPossibleScore: maxByPlayerId.get(playerId) ?? 0,
         team: row.team as { name: string; eliminated: boolean }[],
         ultimatePick: row.ultimate_pick_name as string | null,
         picks: episodeNumbers.map(
@@ -205,7 +208,8 @@ export async function loader({ request }: Route.LoaderArgs) {
       };
     })
     .sort(
-      (a, b) => b.score - a.score || a.displayName.localeCompare(b.displayName),
+      (a, b) => b.score - a.score || b.maxPossibleScore - a.maxPossibleScore ||
+        a.displayName.localeCompare(b.displayName),
     );
 
   // Standard competition ranking ("1224"): tied scores share the same rank,

@@ -41,6 +41,7 @@ export function DetailedScores({
     rank: number;
     displayName: string;
     score: number;
+    maxPossibleScore: number;
     team: { name: string; eliminated: boolean }[];
     ultimatePick: string | null;
     picks: Pick[];
@@ -83,6 +84,12 @@ export function DetailedScores({
                   <th className="min-w-[140px] whitespace-nowrap border-b border-l border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
                     score
                   </th>
+                  <th
+                    title="Projected total with all remaining picks correct. Unknown rounds assume one elimination and individual immunity through Final 3."
+                    className="min-w-[160px] whitespace-nowrap border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary"
+                  >
+                    max possible score
+                  </th>
                   <th className="min-w-[260px] whitespace-nowrap border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
                     final 3
                   </th>
@@ -107,6 +114,9 @@ export function DetailedScores({
                     </td>
                     <td className="whitespace-nowrap border-b border-l border-r border-primary/40 px-3 py-2 text-primary">
                       {row.score}
+                    </td>
+                    <td className="whitespace-nowrap border-b border-r border-primary/40 px-3 py-2 text-primary">
+                      {row.maxPossibleScore}
                     </td>
                     <td className="whitespace-nowrap border-b border-r border-primary/40 px-3 py-2 text-primary">
                       {row.team.length > 0 ? (
