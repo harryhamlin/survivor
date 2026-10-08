@@ -42,7 +42,7 @@ try {
   if(targetIds.size)await client.query('DELETE FROM tribal_episodes WHERE id=ANY($1::int[])',[[...targetIds]]);
   const inserted=[];
   for(const r of prepared){
-   const result=await client.query('INSERT INTO tribal_episodes (tribe_name,episode_start,episode_end,challenge_wins,contestants,season_number,name_reference) VALUES ($1,$2,$3,$4,$5::int[],$6,$7) RETURNING *',[r.tribe_name,r.episode_start,r.episode_end,r.challenge_wins,r.ids,plan.season_number,r.name_reference ?? null]);
+   const result=await client.query('INSERT INTO tribal_episodes (tribe_name,episode_start,episode_end,challenge_wins,contestants,season_number) VALUES ($1,$2,$3,$4,$5::int[],$6) RETURNING *',[r.tribe_name,r.episode_start,r.episode_end,r.challenge_wins,r.ids,plan.season_number]);
    const id=result.rows[0].id;
    inserted.push({...result.rows[0],ids:[...r.ids].sort((a,b)=>a-b)});
   }

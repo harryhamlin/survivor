@@ -336,8 +336,44 @@ SET season_number = r.season_number
 FROM roster_seasons r
 WHERE t.id = r.id;
 
+-- Resolve names by appearance ID, preserving the order of the roster array.
+CREATE OR REPLACE FUNCTION populate_tribal_episode_names()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  SELECT string_agg(split_part(btrim(s.contestant_name), ' ', 1), ', ' ORDER BY member.position)
+  INTO NEW.name_reference
+  FROM unnest(NEW.contestants) WITH ORDINALITY AS member(stats_id, position)
+  JOIN survivor_stats s ON s.id = member.stats_id;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tribal_episode_names ON tribal_episodes;
+CREATE TRIGGER tribal_episode_names
+BEFORE INSERT OR UPDATE OF contestants, name_reference ON tribal_episodes
+FOR EACH ROW EXECUTE FUNCTION populate_tribal_episode_names();
+
+-- Keep existing rosters current when a contestant name is corrected.
+CREATE OR REPLACE FUNCTION refresh_tribal_episode_names()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE tribal_episodes SET contestants = contestants
+  WHERE NEW.id = ANY(contestants);
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS survivor_stats_tribal_names ON survivor_stats;
+CREATE TRIGGER survivor_stats_tribal_names
+AFTER UPDATE OF contestant_name ON survivor_stats
+FOR EACH ROW WHEN (OLD.contestant_name IS DISTINCT FROM NEW.contestant_name)
+EXECUTE FUNCTION refresh_tribal_episode_names();
+
+-- Backfill names on relaunch, including rosters imported before this trigger.
+UPDATE tribal_episodes SET contestants = contestants;
+
 COMMENT ON COLUMN tribal_episodes.season_number IS 'Survivor season number for this roster; not a foreign key to the app seasons table.';
-COMMENT ON COLUMN tribal_episodes.name_reference IS 'Optional readable reference label for this roster.';
+COMMENT ON COLUMN tribal_episodes.name_reference IS 'Automatically populated comma-separated first names from survivor_stats, in contestants array order.';
 COMMENT ON COLUMN tribal_episodes.tribe_name IS 'Tribe name for this roster and episode range.';
 COMMENT ON COLUMN tribal_episodes.episode_start IS 'First episode in which this roster is valid, inclusive.';
 COMMENT ON COLUMN tribal_episodes.episode_end IS 'Last episode in which this roster is valid, inclusive.';
