@@ -41,7 +41,7 @@ export function DetailedScores({
     rank: number;
     displayName: string;
     score: number;
-    team: string[];
+    team: { name: string; eliminated: boolean }[];
     ultimatePick: string | null;
     picks: Pick[];
   }[];
@@ -115,8 +115,11 @@ export function DetailedScores({
                         // that order puts it on top with no extra sorting
                         // here.
                         <div className="space-y-0.5">
-                          {row.team.map((name) => (
-                            <div key={name}>
+                          {row.team.map(({ name, eliminated }) => (
+                            <div
+                              key={name}
+                              className={eliminated ? "text-red-500" : "text-primary"}
+                            >
                               {name}
                               {name === row.ultimatePick && (
                                 <span className="text-primary/70">

@@ -59,7 +59,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const scores = await getSeasonScores(season.id, season.finalistCount);
   const scoreByPlayerId = new Map(scores.map((s) => [s.playerId, s.score]));
 
-  // One row per fantasy player, with their draft's contestant names
+  // One row per fantasy player, with their draft's contestants
   // pre-aggregated into an array (ultimate pick first) plus that pick called
   // out on its own — LEFT JOINed all the way through so a player with no
   // draft yet still gets a row (empty team array, null ultimate pick). Also
@@ -72,10 +72,15 @@ export async function loader({ request }: Route.LoaderArgs) {
        u.email,
        u.name,
        COALESCE(
-         array_agg(c.name ORDER BY dp.is_ultimate_pick DESC, c.name)
+         jsonb_agg(jsonb_build_object(
+           'name', c.name,
+           'eliminated', EXISTS (
+             SELECT 1 FROM episode_eliminations ee WHERE ee.contestant_id = c.id
+           )
+         ) ORDER BY dp.is_ultimate_pick DESC, c.name)
            FILTER (WHERE c.name IS NOT NULL),
-         ARRAY[]::text[]
-       ) AS team_names,
+         '[]'::jsonb
+       ) AS team,
        MAX(c.name) FILTER (WHERE dp.is_ultimate_pick) AS ultimate_pick_name
      FROM fantasy_players fp
      JOIN users u ON u.id = fp.user_id
@@ -192,7 +197,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         playerId,
         displayName: rowDisplayName,
         score: scoreByPlayerId.get(playerId) ?? 0,
-        team: row.team_names as string[],
+        team: row.team as { name: string; eliminated: boolean }[],
         ultimatePick: row.ultimate_pick_name as string | null,
         picks: episodeNumbers.map(
           (episodeNumber) => picksByEpisode?.get(episodeNumber) ?? null,
