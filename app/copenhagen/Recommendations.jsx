@@ -8,14 +8,49 @@ const safeLink = (value) => {
   } catch { return null; }
 };
 
-function Answer({ answer }) {
+function answerText(blocks) {
+  const text = blocks.map((block) => block.text).join('');
+  // Parse before adding citations, which can split a Markdown link across blocks.
+  const pattern = /\[([^\]\n]+)\]\((<?https?:\/\/[^\s<>]*(?:\([^\s<>]*\)[^\s<>]*)?)>?\)/g;
+  const parts = [];
+  let offset = 0;
+  for (const match of text.matchAll(pattern)) {
+    if (match.index > offset) parts.push({ text: text.slice(offset, match.index), end: match.index });
+    parts.push({ text: match[1], href: safeLink(match[2].replace(/^</, '')), end: match.index + match[0].length });
+    offset = match.index + match[0].length;
+  }
+  if (offset < text.length) parts.push({ text: text.slice(offset), end: text.length });
+  let blockEnd = 0;
+  const citations = blocks.map((block) => ({ end: blockEnd += block.text.length, ids: block.citations || [] }));
+  let start = 0;
+  return parts.flatMap((part) => {
+    const items = [];
+    const within = citations.filter((citation) => citation.end >= start && citation.end <= part.end);
+    if (part.href) {
+      items.push({ ...part });
+      for (const citation of within) items.push({ citations: citation.ids });
+    } else {
+      let cursor = start;
+      for (const citation of within) {
+        items.push({ text: part.text.slice(cursor - start, citation.end - start) }, { citations: citation.ids });
+        cursor = citation.end;
+      }
+      items.push({ text: part.text.slice(cursor - start) });
+    }
+    citations.splice(0, within.length);
+    start = part.end;
+    return items;
+  });
+}
+
+export function Answer({ answer }) {
   const sources = (answer.sources || []).filter((source) => safeLink(source.url));
   return <div className="recommendation-answer">
     <p className="recommendation-speaker">ChatGPT</p>
     <div className="recommendation-text">
-      {answer.blocks.map((block, index) => <React.Fragment key={index}>
-        <span>{block.text}</span>
-        {(block.citations || []).map((id) => {
+      {answerText(answer.blocks).map((part, index) => <React.Fragment key={index}>
+        {part.href ? <a href={part.href} target="_blank" rel="noopener noreferrer">{part.text}</a> : part.text}
+        {(part.citations || []).map((id) => {
           const source = sources.find((source) => source.id === id);
           return source && <sup key={id}><a href={source.url} title={source.title} aria-label={`Source ${id}: ${source.title}`} target="_blank" rel="noopener noreferrer">[{id}]</a></sup>;
         })}

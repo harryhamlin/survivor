@@ -509,6 +509,7 @@
 .copenhagen-app .recommendation-answer { padding: 18px 0; }
 .copenhagen-app .recommendation-speaker { margin-bottom: 8px; font: 500 11px "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: .1em; }
 .copenhagen-app .recommendation-text { white-space: pre-wrap; line-height: 1.8; }
+.copenhagen-app .recommendation-text a { color: var(--secondary); text-decoration: underline; }
 .copenhagen-app .recommendation-text sup { margin-left: 3px; }
 .copenhagen-app .recommendation-sources { display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 14px; font-size: 12px; }
 .copenhagen-app .recommendation-warning, .copenhagen-app .recommendation-status { margin-top: 14px; font-size: 13px; color: var(--secondary); }
