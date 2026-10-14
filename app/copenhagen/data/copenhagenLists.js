@@ -7,6 +7,8 @@ import { pastries, pastriesListUrl } from './pastries.js';
 import { party, partyListUrl } from './party.js';
 import { sauna, saunaListUrl } from './sauna.js';
 
+import { restaurantWeek, restaurantWeekListUrl } from './restaurantWeek.js';
+
 export const lists = addListMemberships({
   food: { label: 'Food', sectionTitle: 'Food & Drink', sourceUrl: foodListUrl, places: food, description: 'Restaurants, bars, and other food stops from the shared Copenhagen food list.' },
   keld: {
@@ -17,6 +19,7 @@ export const lists = addListMemberships({
     description: 'The five restaurants marked as recommended by Keld in the shared Food list.',
   },
   eater: { label: 'Eater', sourceUrl: eaterListUrl, sourceLabel: 'Original Eater guide', places: eater, description: '38 places from Eater’s Copenhagen guide, July 2024 edition.' },
+  restaurantWeek: { label: 'Restaurant Week', mapTitle: 'Copenhagen Restaurant Week Map', sectionTitle: 'Copenhagen Restaurant Week', sourceUrl: restaurantWeekListUrl, sourceLabel: 'Dining Week restaurants & tickets', places: restaurantWeek, description: '166 Copenhagen and Frederiksberg restaurants from Dining Week’s October 2026 programme. One entry per venue; menu offers are combined. Saved on 14 October 2026 — check Dining Week for current dates, prices, and tickets.' },
   museums: { label: 'Museums', sourceUrl: museumsListUrl, places: museums, description: 'Museums, art, gardens, and cultural stops in Copenhagen and nearby, from the shared museum list.' },
   pastries: { label: 'Pastries', sourceUrl: pastriesListUrl, places: pastries, description: 'Saved pastry stops, bakeries, and more from the shared pastry list.' },
   party: { label: 'Party', sourceUrl: partyListUrl, places: party, description: 'Bars and music venues from the shared party list.' },

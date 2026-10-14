@@ -10,7 +10,7 @@ function load({limited=false,blocked=false,answer=async()=>({blocks:[{text:'Apri
   '../rateLimit.server':{limitRequest:async()=>{if(limited)throw new Response('',{status:429});},isRateLimited:async()=>blocked},
   '../trustedOrigin.server':{getTrustedOrigin:r=>new URL(r.url).origin},
  };
- new Function('require','exports','process',source)(name=>{assert.ok(name in modules,name);return modules[name];},exported,{env:{ANTHROPIC_API_KEY:'fake-test-key'}});
+ new Function('require','exports','process',source)(name=>{assert.ok(name in modules,name);return modules[name];},exported,{env:{OPENAI_API_KEY:'fake-test-key'}});
  return {handle:exported.handleRecommendation,calls};
 }
 function request(payload={question:'Coffee?'},origin='https://example.com') {return new Request('https://example.com/api/copenhagen/recommend',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(payload)});}
@@ -19,7 +19,7 @@ test('rejects off-site requests, invalid input and oversized bodies before a pai
  assert.equal((await handle(request({question:''}))).status,400);
  assert.equal((await handle(request({question:'x'.repeat(33000)}))).status,413);assert.equal(calls.length,0);
 });
-test('uses shared rate limits before calling Claude',async()=>{for(const options of [{limited:true},{blocked:true}]){const {handle,calls}=load(options);assert.equal((await handle(request())).status,429);assert.equal(calls.length,0);}});
+test('uses shared rate limits before calling OpenAI',async()=>{for(const options of [{limited:true},{blocked:true}]){const {handle,calls}=load(options);assert.equal((await handle(request())).status,429);assert.equal(calls.length,0);}});
 test('returns the first stream event immediately and emits an answer once ready',async()=>{
  let finish;const {handle}=load({answer:()=>new Promise(resolve=>{finish=resolve;})});const response=await handle(request());
  assert.equal(response.headers.get('Content-Type'),'text/event-stream');const reader=response.body.getReader();const first=await reader.read();assert.match(new TextDecoder().decode(first.value),/event: status/);

@@ -19,7 +19,7 @@ export async function handleRecommendation(request) {
     let payload;
     try { payload = JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new RecommendationError(400, 'Please send a valid question.'); }
     validate(payload);
-    const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new RecommendationError(503, 'Recommendations are not available yet.');
     if (active >= 2) throw new RecommendationError(429, 'Two searches are already running. Please try again shortly.');
     await limitRequest(request, 'copenhagen-ai', 6, 600000);
@@ -34,7 +34,7 @@ export async function handleRecommendation(request) {
         const send = (event, data) => { if (!closed) controller.enqueue(new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)); };
         send('status', { status: 'Searching the saved lists and web…' });
         timer = setInterval(() => send('ping', {}), 12000);
-        recommend(payload, { apiKey, model: process.env.CLAUDE_MODEL || 'claude-sonnet-5-5', signal: AbortSignal.any([request.signal, cancel.signal, AbortSignal.timeout(90000)]) })
+        recommend(payload, { apiKey, model: process.env.OPENAI_MODEL || 'gpt-5-mini', signal: AbortSignal.any([request.signal, cancel.signal, AbortSignal.timeout(90000)]) })
           .then(answer => send('answer', answer))
           .catch(error => send('error', { error: error instanceof RecommendationError ? error.message : 'Recommendations are temporarily unavailable.' }))
           .finally(() => { clearInterval(timer); active--; if (!closed) { closed = true; controller.close(); } });

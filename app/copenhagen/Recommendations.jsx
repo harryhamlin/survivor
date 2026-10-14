@@ -11,7 +11,7 @@ const safeLink = (value) => {
 function Answer({ answer }) {
   const sources = (answer.sources || []).filter((source) => safeLink(source.url));
   return <div className="recommendation-answer">
-    <p className="recommendation-speaker">Claude</p>
+    <p className="recommendation-speaker">ChatGPT</p>
     <div className="recommendation-text">
       {answer.blocks.map((block, index) => <React.Fragment key={index}>
         <span>{block.text}</span>
@@ -86,7 +86,7 @@ export default function Recommendations({ activeList }) {
       </button>
     </h2>
     {open && <div id="copenhagen-recommendations" className="recommendation-panel">
-      <p>Ask Claude about coffee, food, museums, or a plan for your day. It uses all the saved lists and searches the web for relevant details.</p>
+      <p>Ask ChatGPT about coffee, food, museums, or a plan for your day. It uses all the saved lists and searches the web for relevant details.</p>
       {conversation.length > 0 && <div className="recommendation-conversation" aria-label="Recommendation conversation">
         {conversation.map((turn, index) => <div className="recommendation-turn" key={index}>
           <p className="recommendation-question"><strong>You</strong><br />{turn.question}</p>
@@ -97,7 +97,7 @@ export default function Recommendations({ activeList }) {
         <label htmlFor="recommendation-question">{conversation.length ? 'Ask a follow-up' : 'What are you looking for?'}</label>
         <textarea id="recommendation-question" ref={questionRef} value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={2000} rows={3} disabled={pending} placeholder="Where should I go for light-roast filter coffee and a pastry near Nørrebro?" />
         <div className="recommendation-actions">
-          <button className="coffee-find-me" type="submit" disabled={pending || !question.trim()}>{pending ? 'Looking into it…' : 'Ask Claude'}</button>
+          <button className="coffee-find-me" type="submit" disabled={pending || !question.trim()}>{pending ? 'Looking into it…' : 'Ask ChatGPT'}</button>
           {pending && <button type="button" className="recommendation-secondary" onClick={() => controllerRef.current?.abort()}>Cancel</button>}
           {conversation.length > 0 && !pending && <button type="button" className="recommendation-secondary" onClick={() => { setConversation([]); setError(''); }}>New conversation</button>}
         </div>
