@@ -1,0 +1,530 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap');
+
+.copenhagen-app {
+  --snow: #F6F8F9;
+  --granite: #1E2A32;
+  --hairline: #e6e2dd;
+  --muted: #9c8978;
+  --text: #2e2a26;
+  --ink: #0f0f0f;
+  --secondary: #6b6258;
+  --max: 720px;
+}
+
+.copenhagen-app *, .copenhagen-app *::before, .copenhagen-app *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.copenhagen-app { scroll-behavior: smooth; }
+.copenhagen-app {
+  background: var(--snow);
+  color: var(--text);
+  font-family: "Barlow", sans-serif;
+  font-size: 15px;
+  line-height: 1.8;
+  padding-top: 56px;
+}
+.copenhagen-app ::selection { background: var(--ink); color: #fff; }
+.copenhagen-app a { color: var(--secondary); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.copenhagen-app a:hover { color: var(--ink); }
+.copenhagen-app a:focus-visible, .copenhagen-app button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+/* ── Nav ────────────────────────────────────────── */
+.copenhagen-app .site-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  background: var(--granite);
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  height: 56px;
+  display: flex; align-items: center;
+  padding: 0 24px;
+}
+.copenhagen-app .site-nav .brand {
+  font-family: "Barlow Condensed", sans-serif; font-weight: 700;
+  font-size: 15px; color: var(--snow); letter-spacing: .1em;
+  text-transform: uppercase; text-decoration: none;
+}
+.copenhagen-app .site-nav .brand:hover { color: var(--snow); }
+.copenhagen-app .nav-links {
+  margin-left: auto; display: flex; align-items: center; gap: 2px;
+}
+.copenhagen-app .nav-link {
+  font-family: "IBM Plex Mono", monospace; font-size: 12px;
+  letter-spacing: .08em; text-transform: uppercase;
+  color: #9FB4BE; text-decoration: none;
+  padding: 6px 12px;
+  transition: color .15s; cursor: pointer;
+  background: none; border: none;
+}
+.copenhagen-app .nav-link:hover { color: var(--snow); }
+.copenhagen-app .nav-link.active {
+  color: var(--snow);
+  border-bottom: 1px solid rgba(255,255,255,.35);
+  padding-bottom: 5px;
+}
+.copenhagen-app .nav-burger {
+  display: none; background: none; border: none;
+  cursor: pointer; padding: 8px; margin-left: auto;
+}
+.copenhagen-app .nav-burger span {
+  display: block; width: 22px; height: 2px;
+  background: #9FB4BE; margin: 4px 0;
+  transition: transform .2s, opacity .2s;
+}
+
+/* ── Page header ─────────────────────────────────── */
+.copenhagen-app .page-header {
+  background: var(--snow);
+  border-bottom: 1px solid var(--hairline);
+  padding: 88px 24px 72px;
+}
+.copenhagen-app .page-header-inner { max-width: var(--max); margin: 0 auto; }
+.copenhagen-app .page-header-eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 24px;
+}
+.copenhagen-app .page-header-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 24px;
+}
+.copenhagen-app .page-header-title {
+  font-family: "Barlow Condensed", sans-serif; font-weight: 700;
+  font-size: clamp(48px, 7.5vw, 80px); letter-spacing: .01em;
+  text-transform: uppercase; line-height: .95;
+  color: var(--ink); margin-bottom: 20px;
+}
+.copenhagen-app .page-header-tagline {
+  font-family: "Barlow", sans-serif; font-size: 15px;
+  line-height: 1.6; color: var(--secondary); max-width: 38em;
+}
+.copenhagen-app .page-header-contact {
+  margin-top: 24px; display: flex; flex-wrap: wrap; gap: 8px 24px;
+  font-family: "IBM Plex Mono", monospace; font-size: 11px;
+  letter-spacing: .06em; color: var(--muted);
+}
+.copenhagen-app .page-header-contact a { color: var(--secondary); text-decoration: none; }
+.copenhagen-app .page-header-contact a:hover { color: var(--ink); }
+
+/* ── Main layout ─────────────────────────────────── */
+.copenhagen-app .page-main { max-width: var(--max); margin: 0 auto; padding: 0 24px 120px; }
+.copenhagen-app .page-header.cv-page { padding-left: 12px; padding-right: 12px; }
+.copenhagen-app .page-header.cv-page .page-header-inner,
+.copenhagen-app .page-main.cv-page { max-width: 1100px; }
+.copenhagen-app .page-main.cv-page { padding-left: 12px; padding-right: 12px; }
+.copenhagen-app .page-section {
+  padding: 72px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.copenhagen-app .page-section:last-of-type { border-bottom: none; }
+.copenhagen-app .page-main.cv-page .page-section { padding: 44px 0; }
+
+/* ── Section tracker (CV page hover label) ──────────── */
+.copenhagen-app .section-tracker {
+  position: fixed; left: 40px; top: 50%;
+  transform: translateY(-50%);
+  display: none; align-items: center; gap: 12px;
+  z-index: 50; pointer-events: none;
+}
+.copenhagen-app .section-tracker::before {
+  content: ""; display: block; width: 1px; height: 28px;
+  background: var(--hairline);
+}
+.copenhagen-app .section-tracker-text {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--muted); white-space: nowrap;
+  animation: tracker-in .35s ease both;
+}
+@keyframes tracker-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (min-width: 1320px) {
+  .copenhagen-app .section-tracker { display: flex; }
+}
+
+/* ── Section label ───────────────────────────────── */
+.copenhagen-app .section-label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 36px;
+}
+
+/* ── Experience ──────────────────────────────────── */
+.copenhagen-app .role { margin-bottom: 52px; }
+.copenhagen-app .role:last-child { margin-bottom: 0; }
+.copenhagen-app .role-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-bottom: 4px; }
+.copenhagen-app .role-head h3 {
+  font-family: "Barlow Condensed", sans-serif; font-weight: 700;
+  font-size: 21px; letter-spacing: .02em; text-transform: uppercase; color: var(--ink);
+}
+.copenhagen-app .role-head .dates {
+  margin-left: auto; font-family: "IBM Plex Mono", monospace;
+  font-size: 11px; color: var(--muted); white-space: nowrap; letter-spacing: .06em;
+}
+.copenhagen-app .role .org {
+  font-family: "IBM Plex Mono", monospace; font-size: 11px;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); margin: 2px 0 16px;
+}
+.copenhagen-app .role ul { list-style: none; }
+.copenhagen-app .role li { padding-left: 18px; position: relative; margin-bottom: 10px; }
+.copenhagen-app .role li::before { content: "—"; position: absolute; left: 0; color: #c8c0b8; }
+.copenhagen-app .role li b { font-weight: 600; color: var(--ink); }
+
+/* ── Expeditions ─────────────────────────────────── */
+.copenhagen-app .expedition { display: flex; gap: 24px; margin-bottom: 52px; }
+.copenhagen-app .expedition:last-child { margin-bottom: 0; }
+.copenhagen-app .expedition-media { flex: 0 0 140px; width: 140px; }
+.copenhagen-app .expedition-media img {
+  width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: center;
+  display: block; filter: grayscale(30%);
+}
+.copenhagen-app .expedition-media-placeholder {
+  width: 100%; aspect-ratio: 4 / 3;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px dashed var(--hairline); background: rgba(0,0,0,.015);
+}
+.copenhagen-app .expedition-media-placeholder span {
+  font-family: "IBM Plex Mono", monospace; font-size: 10px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+}
+.copenhagen-app .expedition-body { flex: 1 1 auto; min-width: 0; }
+.copenhagen-app .expedition-body .role-head { margin-bottom: 4px; }
+
+/* ── About headshot ─────────────────────────────── */
+.copenhagen-app .about-headshot {
+  flex: 0 0 auto;
+  width: 132px; height: 132px; border-radius: 50%;
+  object-fit: cover; object-position: center top;
+  filter: grayscale(40%);
+  margin-bottom: 20px;
+}
+
+/* ── Stat row ────────────────────────────────────── */
+.copenhagen-app .stat-row {
+  display: flex; flex-wrap: wrap; gap: 32px;
+  margin-top: 36px; padding-top: 36px;
+  border-top: 1px solid var(--hairline);
+}
+.copenhagen-app .stat-item { display: flex; flex-direction: column; gap: 6px; }
+.copenhagen-app .stat-value {
+  font-family: "Barlow Condensed", sans-serif; font-weight: 700;
+  font-size: 32px; letter-spacing: .01em; color: var(--ink); line-height: 1;
+}
+.copenhagen-app .stat-label {
+  font-family: "IBM Plex Mono", monospace; font-size: 10px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+}
+
+/* ── Case study cards ────────────────────────────── */
+.copenhagen-app .case {
+  margin-bottom: 28px; padding-bottom: 28px;
+  border-bottom: 1px solid var(--hairline);
+}
+.copenhagen-app .case:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.copenhagen-app .case h3 {
+  font-family: "Barlow Condensed", sans-serif; font-weight: 700;
+  font-size: 19px; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--ink); margin-bottom: 4px;
+}
+.copenhagen-app .case .case-tags {
+  font-family: "IBM Plex Mono", monospace; font-size: 10px;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 20px;
+}
+.copenhagen-app .case p { margin-bottom: 14px; }
+.copenhagen-app .case p:last-child { margin-bottom: 0; }
+.copenhagen-app .case .lbl {
+  font-family: "IBM Plex Mono", monospace; font-size: 10px;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); display: block; margin-bottom: 3px;
+}
+.copenhagen-app .case .outcome {
+  border-top: 1px solid var(--hairline); padding-top: 12px; margin-top: 12px;
+}
+
+/* ── Portfolio grid ──────────────────────────────── */
+.copenhagen-app .portfolio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1px; background: var(--hairline); border: 1px solid var(--hairline);
+}
+.copenhagen-app .portfolio-card { background: var(--snow); overflow: hidden; }
+.copenhagen-app .portfolio-card-image {
+  width: 100%; height: 160px;
+  object-fit: cover; object-position: center;
+  display: block; opacity: .8; filter: grayscale(30%);
+  transition: opacity .2s, filter .2s;
+}
+.copenhagen-app .portfolio-card:hover .portfolio-card-image { opacity: 1; filter: grayscale(0%); }
+.copenhagen-app .portfolio-card-body { padding: 20px; }
+.copenhagen-app .portfolio-card-body h3 {
+  font-family: "Barlow Condensed", sans-serif; font-weight: 700;
+  font-size: 17px; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--ink); margin-bottom: 6px;
+}
+.copenhagen-app .portfolio-card-body .card-tags {
+  font-family: "IBM Plex Mono", monospace; font-size: 10px;
+  letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 10px;
+}
+.copenhagen-app .portfolio-card-body p { font-size: 14px; color: var(--secondary); margin-bottom: 16px; }
+.copenhagen-app .portfolio-card-links {
+  display: flex; gap: 20px;
+  font-family: "IBM Plex Mono", monospace; font-size: 11px;
+  letter-spacing: .06em; text-transform: uppercase;
+}
+
+/* ── Skills ──────────────────────────────────────── */
+.copenhagen-app .skill-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px 48px; }
+.copenhagen-app .skill-block h3 {
+  font-family: "Barlow Condensed", sans-serif; font-weight: 700;
+  font-size: 15px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink); margin-bottom: 8px;
+}
+.copenhagen-app .skill-block p { font-size: 14px; color: var(--secondary); margin-bottom: 12px; }
+.copenhagen-app .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.copenhagen-app .chip {
+  font-family: "IBM Plex Mono", monospace; font-size: 10px;
+  letter-spacing: .06em; text-transform: uppercase;
+  border: 1px solid var(--hairline); padding: 4px 10px; color: var(--secondary);
+}
+
+/* ── Education ───────────────────────────────────── */
+.copenhagen-app .edu { margin-bottom: 36px; }
+.copenhagen-app .edu:last-child { margin-bottom: 0; }
+.copenhagen-app .edu h3 {
+  font-family: "Barlow Condensed", sans-serif; font-weight: 700;
+  font-size: 18px; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--ink); margin-bottom: 4px;
+}
+.copenhagen-app .edu .dates {
+  font-family: "IBM Plex Mono", monospace; font-size: 11px;
+  color: var(--muted); letter-spacing: .06em; display: block; margin-bottom: 6px;
+}
+.copenhagen-app .edu p { font-size: 14px; color: var(--secondary); }
+
+/* ── Contact links ───────────────────────────────── */
+.copenhagen-app .contact-links { list-style: none; }
+.copenhagen-app .contact-link-row {
+  display: flex; align-items: baseline; gap: 24px;
+  padding: 18px 0; border-bottom: 1px solid var(--hairline);
+}
+.copenhagen-app .contact-link-row:last-child { border-bottom: none; }
+.copenhagen-app .contact-link-label {
+  font-family: "IBM Plex Mono", monospace; font-size: 10px;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); width: 80px; flex-shrink: 0;
+}
+.copenhagen-app .contact-link-value {
+  font-family: "Barlow", sans-serif; font-size: 15px;
+  color: var(--secondary); text-decoration: none;
+}
+.copenhagen-app .contact-link-value:hover { color: var(--ink); }
+
+/* ── Footer ──────────────────────────────────────── */
+.copenhagen-app .site-footer {
+  background: var(--snow); border-top: 1px solid var(--hairline);
+  padding: 48px 24px; text-align: center;
+}
+.copenhagen-app .site-footer p {
+  font-family: "IBM Plex Mono", monospace; font-size: 11px;
+  letter-spacing: .06em; color: var(--muted);
+}
+.copenhagen-app .site-footer .footer-credit { margin-top: 6px; font-size: 10px; }
+.copenhagen-app .site-footer a { color: var(--secondary); text-decoration: none; }
+.copenhagen-app .site-footer a:hover { color: var(--ink); }
+.copenhagen-app .site-footer .footer-links {
+  display: flex; justify-content: center; gap: 32px; margin-top: 12px;
+  font-family: "IBM Plex Mono", monospace; font-size: 11px;
+  letter-spacing: .1em; text-transform: uppercase;
+}
+
+/* ── Reveal ──────────────────────────────────────── */
+.copenhagen-app .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
+.copenhagen-app .reveal.in { opacity: 1; transform: none; }
+
+/* ── Responsive ──────────────────────────────────── */
+@media (max-width: 640px) {
+  .copenhagen-app .nav-burger { display: block; }
+  .copenhagen-app .nav-links {
+    display: none; position: absolute; top: 56px; left: 0; right: 0;
+    background: var(--granite); flex-direction: column; align-items: flex-start;
+    padding: 12px 24px 20px; gap: 2px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    margin-left: 0;
+  }
+  .copenhagen-app .nav-links.open { display: flex; }
+  .copenhagen-app .nav-link { padding: 10px 4px; width: 100%; }
+  .copenhagen-app .nav-link.active { border-bottom: none; color: #fff; padding-bottom: 10px; }
+  .copenhagen-app .skill-grid { grid-template-columns: 1fr; }
+  .copenhagen-app .role-head .dates { margin-left: 0; }
+  .copenhagen-app .portfolio-grid { grid-template-columns: 1fr; }
+  .copenhagen-app .expedition { flex-direction: column; gap: 14px; }
+  .copenhagen-app .expedition-media { width: 160px; }
+  .copenhagen-app .page-header { padding: 64px 24px 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copenhagen-app .reveal { opacity: 1; transform: none; transition: none; }
+  .copenhagen-app { scroll-behavior: auto; }
+  .copenhagen-app .section-tracker-text { animation: none; }
+}
+
+@media print {
+  .copenhagen-app .reveal { opacity: 1; transform: none; }
+  .copenhagen-app .site-nav { display: none; }
+  .copenhagen-app { padding-top: 0; }
+}
+
+/* ── Climbing test: expedition map (Leaflet) ─────── */
+.copenhagen-app .exmap-hint {
+  font-family: "IBM Plex Mono", monospace; font-size: 10px;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 16px;
+}
+.copenhagen-app .exmap-leaflet {
+  width: 96vw; margin-left: calc(50% - 48vw);
+  height: 82vh; min-height: 480px;
+  border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline);
+  background: #0d1b24; z-index: 1;
+}
+.copenhagen-app .peak-pin { background: none; border: none; }
+.copenhagen-app .peak-pin svg {
+  display: block; width: 30px; height: 38px;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.5));
+  transition: transform .16s ease;
+}
+.copenhagen-app .peak-pin:hover svg { transform: scale(1.28) translateY(-2px); }
+.copenhagen-app .leaflet-tooltip.peak-tip {
+  background: var(--granite); color: var(--snow);
+  border: none; border-radius: 4px; padding: 5px 9px;
+  font-family: "IBM Plex Mono", monospace; font-size: 10px; font-weight: 500;
+  letter-spacing: .08em; text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.copenhagen-app .leaflet-tooltip.peak-tip::before { border-top-color: var(--granite); }
+.copenhagen-app .leaflet-tooltip.peak-tip small {
+  display: block; color: #9fb4be; letter-spacing: .04em;
+  text-transform: none; margin-top: 2px;
+}
+.copenhagen-app .leaflet-bar a { color: var(--ink) !important; font-family: "IBM Plex Mono", monospace; }
+.copenhagen-app .leaflet-control-attribution { font-family: "IBM Plex Mono", monospace; font-size: 9px; }
+
+/* Clickable expedition rows on the test page */
+.copenhagen-app .expedition.clickable { cursor: pointer; }
+.copenhagen-app .expedition.clickable:hover .expedition-body h3 { color: var(--secondary); }
+
+/* Detail overlay card */
+.copenhagen-app .exmap-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(15,15,15,.62); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  opacity: 0; pointer-events: none; transition: opacity .22s ease;
+}
+.copenhagen-app .exmap-overlay.open { opacity: 1; pointer-events: auto; }
+.copenhagen-app .exmap-card {
+  position: relative; width: min(900px, 94vw); overflow: hidden;
+  background: var(--snow); border: 1px solid var(--hairline);
+  box-shadow: 0 30px 70px rgba(0,0,0,.4);
+  transform: translateY(16px); transition: transform .28s cubic-bezier(.2,.8,.2,1);
+}
+.copenhagen-app .exmap-overlay.open .exmap-card { transform: none; }
+.copenhagen-app .exmap-card-scroll { max-height: calc(100vh - 40px); overflow-y: auto; }
+.copenhagen-app .exmap-card .photo {
+  width: 100%; height: auto; display: block; filter: grayscale(20%);
+}
+.copenhagen-app .exmap-card .cbody { padding: 26px 28px 30px; }
+.copenhagen-app .exmap-card .role-head { margin-bottom: 6px; }
+.copenhagen-app .exmap-card .detail { color: var(--text); line-height: 1.7; }
+.copenhagen-app .exmap-card .close {
+  position: absolute; top: 12px; right: 12px; width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,255,255,.4); background: rgba(15,15,15,.55);
+  color: #fff; font-size: 18px; line-height: 1; cursor: pointer;
+}
+.copenhagen-app .exmap-card .close:hover { background: rgba(15,15,15,.85); }
+
+/* Unlinked Copenhagen coffee guide. */
+.copenhagen-app .coffee-map { height: 65vh; height: 65svh; min-height: 360px; max-height: 720px; touch-action: none; }
+.copenhagen-app .copenhagen-map-tile { filter: grayscale(1) invert(1) brightness(.8); }
+.copenhagen-app .coffee-location-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; margin-bottom: 18px; }
+.copenhagen-app .coffee-location-controls p { flex: 1 1 240px; margin: 0; font-size: 13px; }
+.copenhagen-app .coffee-find-me { padding: 8px 18px; border: 1px solid var(--granite); background: var(--granite); color: var(--snow); font: inherit; cursor: pointer; }
+.copenhagen-app .coffee-find-me:disabled { opacity: .55; cursor: default; }
+.copenhagen-app .coffee-legend { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 18px; font-size: 12px; }
+.copenhagen-app .coffee-legend span { display: flex; align-items: center; gap: 8px; }
+.copenhagen-app .coffee-legend i { width: 10px; height: 10px; border-radius: 50%; background: #668fa3; }
+.copenhagen-app .coffee-legend i.priority { background: #c62d2d; }
+.copenhagen-app .coffee-pin { background: none; border: none; }
+.copenhagen-app .coffee-pin span, .copenhagen-app .coffee-number { display: flex; align-items: center; justify-content: center; background: #426d80; color: #fff; border-radius: 50%; width: 30px; height: 30px; font: 600 12px "IBM Plex Mono", monospace; }
+.copenhagen-app .coffee-pin span { border: 2px solid #fff; box-shadow: 0 2px 6px #0008; }
+.copenhagen-app .coffee-pin.priority span, .copenhagen-app .coffee-number.priority { background: #c62d2d; }
+.copenhagen-app .coffee-list { display: grid; gap: 0; }
+.copenhagen-app .coffee-row { display: flex; gap: 18px; width: 100%; padding: 24px 0; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; text-align: left; color: var(--text); font: inherit; cursor: pointer; }
+.copenhagen-app .coffee-row:last-child { border-bottom: 0; }
+.copenhagen-app .coffee-number { flex-shrink: 0; margin-top: 2px; }
+.copenhagen-app .coffee-name { display: block; font-weight: 600; font-size: 19px; color: var(--ink); }
+.copenhagen-app .coffee-row:hover .coffee-name { color: var(--secondary); }
+.copenhagen-app .coffee-row:focus-visible { outline: 2px solid var(--secondary); outline-offset: 4px; }
+.copenhagen-app .coffee-address { display: block; font-size: 13px; color: var(--muted); margin: 6px 0 10px; }
+.copenhagen-app .coffee-detail, .copenhagen-app .coffee-note { display: block; line-height: 1.7; }
+.copenhagen-app .coffee-note { font-size: 13px; font-weight: 600; margin-top: 8px; }
+.copenhagen-app .coffee-dialog { width: min(560px, calc(100vw - 40px)); max-height: calc(100dvh - 40px); padding: 34px; border: 1px solid var(--hairline); background: var(--snow); color: var(--text); }
+.copenhagen-app .coffee-dialog::backdrop { background: #0f0f0f9e; backdrop-filter: blur(3px); }
+.copenhagen-app .coffee-dialog h2 { font-size: 24px; margin-bottom: 16px; padding-right: 18px; }
+.copenhagen-app .coffee-dialog p { margin-bottom: 16px; }
+.copenhagen-app .coffee-close { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border: 0; background: transparent; color: var(--ink); font-size: 24px; cursor: pointer; }
+@media (max-width: 600px) {
+  .copenhagen-app .coffee-row { gap: 12px; }
+  .copenhagen-app .coffee-dialog { padding: 28px 22px; }
+}
+/* Fixed category navigation stays available while exploring the map or list. */
+.copenhagen-app .copenhagen-nav { gap: 12px; height: auto; min-height: 56px; padding-top: 6px; padding-bottom: 6px; }
+.copenhagen-app .copenhagen-nav .brand { flex-shrink: 0; }
+.copenhagen-app .copenhagen-active-list { display: none; }
+.copenhagen-app .copenhagen-nav-lists { display: flex; flex-wrap: wrap; align-items: center; gap: 0; min-width: 0; }
+.copenhagen-app .copenhagen-nav-lists .nav-link { flex-shrink: 0; }
+.copenhagen-app .copenhagen-nav-lists .nav-link:focus-visible { outline-color: var(--snow); outline-offset: -2px; }
+.copenhagen-app .copenhagen-pin { border: 2px solid #fff; border-radius: 50%; background: #426d80; box-shadow: 0 2px 6px #0008; }
+.copenhagen-app .copenhagen-pin.priority { background: #c62d2d; }
+.copenhagen-app .copenhagen-pin-label { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); display: block; width: max-content; max-width: 180px; padding: 5px 8px; border: 1px solid #668fa3; border-radius: 4px; background: var(--granite); color: var(--snow); font: 500 11px/1.35 "IBM Plex Mono", monospace; text-align: center; box-shadow: 0 2px 6px #0008; }
+.copenhagen-app .copenhagen-pin.priority .copenhagen-pin-label { border-color: #c62d2d; }
+.copenhagen-app .copenhagen-pin.shared { background: #22c55e; }
+.copenhagen-app .copenhagen-pin.shared .copenhagen-pin-label { background: #166534; border-color: #4ade80; }
+.copenhagen-app .coffee-legend i.shared { background: #22c55e; }
+.copenhagen-app .coffee-number.shared { background: #257a49; }
+.copenhagen-app .coffee-row.shared .coffee-name { color: #257a49; }
+.copenhagen-app .coffee-row.shared:hover .coffee-name { color: #185f37; }
+.copenhagen-app .coffee-memberships { font-size: 13px; }
+.copenhagen-app .recommendation-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 0; border: 0; background: transparent; color: var(--ink); font: 600 22px "Barlow", sans-serif; text-align: left; cursor: pointer; }
+.copenhagen-app .recommendation-toggle span { font-size: 26px; }
+.copenhagen-app .recommendation-panel { margin-top: 18px; }
+.copenhagen-app .recommendation-panel > p { margin-bottom: 20px; }
+.copenhagen-app .recommendation-panel label { display: block; margin: 20px 0 8px; font-weight: 600; }
+.copenhagen-app .recommendation-panel textarea { display: block; width: 100%; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 0; background: #fff; color: var(--text); font: inherit; line-height: 1.6; resize: vertical; }
+.copenhagen-app .recommendation-panel textarea:focus-visible { outline: 2px solid var(--secondary); outline-offset: 2px; }
+.copenhagen-app .recommendation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.copenhagen-app .recommendation-secondary { padding: 8px 0; border: 0; background: transparent; color: var(--secondary); font: inherit; text-decoration: underline; cursor: pointer; }
+.copenhagen-app .recommendation-turn { margin: 24px 0; }
+.copenhagen-app .recommendation-question { padding: 14px 18px; background: #e9edef; white-space: pre-wrap; }
+.copenhagen-app .recommendation-answer { padding: 18px 0; }
+.copenhagen-app .recommendation-speaker { margin-bottom: 8px; font: 500 11px "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: .1em; }
+.copenhagen-app .recommendation-text { white-space: pre-wrap; line-height: 1.8; }
+.copenhagen-app .recommendation-text sup { margin-left: 3px; }
+.copenhagen-app .recommendation-sources { display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 14px; font-size: 12px; }
+.copenhagen-app .recommendation-warning, .copenhagen-app .recommendation-status { margin-top: 14px; font-size: 13px; color: var(--secondary); }
+.copenhagen-app .recommendation-error { margin-top: 16px; color: #a32828; }
+.copenhagen-app .copenhagen-pin:hover, .copenhagen-app .copenhagen-pin:focus-visible { z-index: 1000 !important; }
+.copenhagen-app .copenhagen-pin:hover .copenhagen-pin-label, .copenhagen-app .copenhagen-pin:focus-visible .copenhagen-pin-label { background: #314551; }
+.copenhagen-app .copenhagen-pin.shared:hover .copenhagen-pin-label, .copenhagen-app .copenhagen-pin.shared:focus-visible .copenhagen-pin-label { background: #14532d; }
+@media (max-width: 640px) {
+  .copenhagen-app .copenhagen-nav { height: 56px; padding: 0 16px; gap: 12px; }
+  .copenhagen-app .copenhagen-active-list { display: block; color: #9fb4be; font-size: 12px; }
+  .copenhagen-app .copenhagen-nav-lists { display: none; position: absolute; top: 56px; left: 0; right: 0; padding: 8px 16px 16px; background: var(--granite); border-bottom: 1px solid rgba(255,255,255,.07); max-height: calc(100dvh - 56px); overflow-y: auto; }
+  .copenhagen-app .copenhagen-nav-lists.open { display: flex; flex-direction: column; align-items: stretch; }
+  .copenhagen-app .copenhagen-nav-lists .nav-link { width: 100%; padding: 12px; font-size: 12px; text-align: left; }
+  .copenhagen-app .copenhagen-pin-label { max-width: 150px; font-size: 10px; }
+}
+
+body:has(.copenhagen-app) { background: #F6F8F9; color-scheme: light; padding-top:56px; }
+body:has(.copenhagen-app) > footer { display: none; }
+.copenhagen-app, .copenhagen-app * { text-transform: none; }

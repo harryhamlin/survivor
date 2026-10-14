@@ -9,6 +9,8 @@ export default [
   // `?index` query param to disambiguate form submissions — giving login its
   // own real path avoids that entirely.
   index("routes/home.tsx"),
+  route("copenhagen", "routes/copenhagen.tsx"),
+  route("api/copenhagen/recommend", "routes/copenhagen-recommend.ts"),
   route("login", "routes/login.tsx"),
   route("forgot-password", "routes/forgot-password.tsx"),
   route("reset-password/:token", "routes/reset-password.tsx"),
