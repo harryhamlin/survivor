@@ -13,6 +13,7 @@ import {
   getEpisodeScoringInfo,
   isPredictionCorrect,
   getPlayerScoreBreakdown,
+  type ScoringStatus,
 } from "../scoring.server";
 import { DetailedScores } from "../components/DetailedScores";
 
@@ -129,8 +130,10 @@ export async function loader({ request }: Route.LoaderArgs) {
       {
         eliminationPickName: string | null;
         eliminationCorrect: boolean | null;
+        eliminationStatus: ScoringStatus;
         immunityPickName: string | null;
         immunityCorrect: boolean | null;
+        immunityStatus: ScoringStatus;
       }
     >
   >();
@@ -150,6 +153,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     }
     picksByPlayerId.get(playerId)!.set(row.episode_number as number, {
       eliminationPickName: row.elimination_pick_name as string | null,
+      eliminationStatus: info?.eliminationStatus ?? "pending",
       eliminationCorrect: info
         ? isPredictionCorrect(
             info.eliminationStatus,
@@ -158,6 +162,7 @@ export async function loader({ request }: Route.LoaderArgs) {
           )
         : null,
       immunityPickName: row.immunity_pick_name as string | null,
+      immunityStatus: info?.immunityStatus ?? "pending",
       immunityCorrect: info
         ? isPredictionCorrect(
             info.immunityStatus,

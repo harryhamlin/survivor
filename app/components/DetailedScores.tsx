@@ -9,20 +9,23 @@ import { ScoreOverviewModal } from "./ScoreOverviewModal";
 import type {
   WeeklyPickBreakdownRow,
   FinalThreeBreakdownRow,
+  ScoringStatus,
 } from "../scoring.server";
 
 type Pick = {
   eliminationPickName: string | null;
   eliminationCorrect: boolean | null;
+  eliminationStatus: ScoringStatus;
   immunityPickName: string | null;
   immunityCorrect: boolean | null;
+  immunityStatus: ScoringStatus;
 } | null;
 
 // Green once a pick is confirmed correct, red once confirmed incorrect, and
-// the same neutral color as before while that category hasn't been graded
-// yet (`correct` is null — either still pending, or voided) — see
+// grey for void categories, and muted green while still pending — see
 // isPredictionCorrect in scoring.server.ts for what "correct" means.
-function pickColorClass(correct: boolean | null): string {
+function pickColorClass(correct: boolean | null, status: ScoringStatus): string {
+  if (status === "void") return "text-gray-400";
   if (correct === true) return "text-primary";
   if (correct === false) return "text-red-500";
   return "text-primary/70";
@@ -151,11 +154,11 @@ export function DetailedScores({
                       >
                         {pick ? (
                           <>
-                            <span className={pickColorClass(pick.eliminationCorrect)}>
+                            <span className={pickColorClass(pick.eliminationCorrect, pick.eliminationStatus)}>
                               out: {pick.eliminationPickName ?? "—"}
                             </span>
                             <br />
-                            <span className={pickColorClass(pick.immunityCorrect)}>
+                            <span className={pickColorClass(pick.immunityCorrect, pick.immunityStatus)}>
                               imm: {pick.immunityPickName ?? "—"}
                             </span>
                           </>
