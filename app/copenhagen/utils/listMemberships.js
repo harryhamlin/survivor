@@ -10,7 +10,9 @@ const savedId = (place) => {
 
 function samePlace(a, b) {
   const id = savedId(a);
-  if (id && id === savedId(b)) return true;
+  const otherId = savedId(b);
+  // Distinct saved venue IDs must not merge just because branches are nearby.
+  if (id && otherId) return id === otherId;
   // Sources can spell the same venue differently or put its entrance a few
   // metres apart. Require both a matching name and a nearby location.
   const longitudeMetres = (a.lon - b.lon) * 111320 * Math.cos(a.lat * Math.PI / 180);

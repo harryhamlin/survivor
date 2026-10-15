@@ -6,10 +6,12 @@ import { museums, museumsListUrl } from './museums.js';
 import { pastries, pastriesListUrl } from './pastries.js';
 import { party, partyListUrl } from './party.js';
 import { sauna, saunaListUrl } from './sauna.js';
+import { morgans } from './morgans.js';
 
 import { restaurantWeek, restaurantWeekListUrl } from './restaurantWeek.js';
 
 export const lists = addListMemberships({
+  morgans: { label: 'Morgans List', places: morgans, description: 'Morgan’s saved restaurants in Copenhagen and Søllerød.' },
   food: { label: 'Food', sectionTitle: 'Food & Drink', sourceUrl: foodListUrl, places: food, description: 'Restaurants, bars, and other food stops from the shared Copenhagen food list.' },
   keld: {
     label: 'Keld’s recommendations',

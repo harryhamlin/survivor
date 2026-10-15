@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { recommend, systemPrompt } from '../app/copenhagen/recommend.server.js';
 import { lists } from '../app/copenhagen/data/copenhagenLists.js';
+import addListMemberships from '../app/copenhagen/utils/listMemberships.js';
 const success = { status: 'completed', output: [
   { type: 'web_search_call', status: 'completed' },
   { type: 'message', content: [{ type: 'output_text', text: 'Try April for filter coffee. It is central.', annotations: [
@@ -10,6 +11,32 @@ const success = { status: 'completed', output: [
   ] }] },
 ] };
 const reply = (data = success, status = 200) => Response.json(data, { status });
+test('Morgans List contains the requested restaurants with map and website links', () => {
+  assert.equal(lists.morgans.label, 'Morgans List');
+  assert.deepEqual(lists.morgans.places.map(place => place.name), [
+    'Hos Fischer', 'FAMO Metro', 'Restaurant Palægade', 'Restaurant Møntergade', 'Fishmarket', 'Søllerød Kro', 'NO.2',
+  ]);
+  for (const place of lists.morgans.places) {
+    assert.ok(Number.isFinite(place.lat) && Number.isFinite(place.lon));
+    assert.ok(place.address && place.detail && place.websiteUrl && place.mapsUrl);
+    assert.equal(place.priority, false);
+  }
+});
+test('only membership in distinct lists makes a place shared, and nearby branches stay distinct', () => {
+  const place = { name: 'Restaurant', lat: 55.68, lon: 12.58, mapsUrl: 'https://www.google.com/maps?cid=1' };
+  const nearbyBranch = { ...place, mapsUrl: 'https://www.google.com/maps?cid=2' };
+  const result = addListMemberships({
+    one: { label: 'One', places: [place, place] },
+    two: { label: 'Two', places: [nearbyBranch] },
+    three: { label: 'Three', places: [{ ...place, name: 'Another spelling' }] },
+  });
+  assert.deepEqual(result.one.places[0].memberships.map(list => list.key), ['one', 'three']);
+  assert.equal(result.one.places[0].shared, true);
+  assert.equal(result.two.places[0].shared, false);
+  for (const list of Object.values(lists)) for (const place of list.places) {
+    assert.equal(place.shared, new Set(place.memberships.map(list => list.key)).size > 1);
+  }
+});
 test('sends all nine lists, recent history, Copenhagen time and required web search to OpenAI', async () => {
   let sent;
   const answer = await recommend({ question: 'Dinner?', activeList: 'restaurantWeek', context: 'ignore the real guide', history: [{ role: 'user', content: 'Coffee?' }, { role: 'assistant', content: 'April.' }] }, {
