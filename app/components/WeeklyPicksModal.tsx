@@ -231,7 +231,7 @@ export function WeeklyPicksModal({
                   role="alert"
                   className="border border-amber-400/50 bg-amber-400/10 p-3 text-sm text-amber-300"
                 >
-                  Caution: you're hedging your bets. The person you've chosen to be eliminated is in the tribe you've chosen to win immunity
+                  Caution: you're hedging your bets. The contestant you've chosen to be eliminated is in the tribe you've chosen to win immunity
                 </p>
               )}
               {/* Set by the dashboard action if the save failed server-side. */}
