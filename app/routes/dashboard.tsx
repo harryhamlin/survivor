@@ -104,7 +104,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Contestants who can still be predicted to be voted out this week —
   // always just whoever in the season hasn't been eliminated yet.
   const activeContestantsResult = await pool.query(
-    `SELECT c.id, c.name FROM contestants c
+    `SELECT c.id, c.name, c.tribe_id FROM contestants c
      WHERE c.season_id = $1
        AND NOT EXISTS (
          SELECT 1 FROM episode_eliminations ee WHERE ee.contestant_id = c.id
@@ -115,6 +115,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const activeContestants = activeContestantsResult.rows as {
     id: number;
     name: string;
+    tribe_id: number | null;
   }[];
 
   // This season's tribes — the choices for the weekly immunity pick.

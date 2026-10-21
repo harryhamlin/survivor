@@ -31,7 +31,7 @@ export function WeeklyPicksModal({
   currentPicks,
   error,
 }: {
-  contestants: { id: number; name: string }[];
+  contestants: { id: number; name: string; tribe_id: number | null }[];
   tribes: { id: number; name: string; color: string }[];
   immunityType: "tribe" | "individual";
   currentPicks: {
@@ -57,6 +57,11 @@ export function WeeklyPicksModal({
   );
 
   const canSubmit = eliminationPickId !== "" && immunityPickId !== "";
+  const isHedgingBets =
+    immunityType === "tribe" &&
+    canSubmit &&
+    contestants.find((contestant) => contestant.id === eliminationPickId)
+      ?.tribe_id === immunityPickId;
   // Whether the form's current selections differ from what was already
   // saved — false only while editing existing picks and nothing's been
   // touched yet; a fresh, never-submitted pick always counts as a change.
@@ -220,6 +225,14 @@ export function WeeklyPicksModal({
                     ))}
                   </select>
                 </div>
+              )}
+              {isHedgingBets && (
+                <p
+                  role="alert"
+                  className="border border-amber-400/50 bg-amber-400/10 p-3 text-sm text-amber-300"
+                >
+                  Caution: you're hedging your bets. The person you've chosen to be eliminated is in the tribe you've chosen to win immunity
+                </p>
               )}
               {/* Set by the dashboard action if the save failed server-side. */}
               {error && <p className="text-sm text-red-500">{error}</p>}
