@@ -6,7 +6,7 @@
 // with the actual form living in a modal either way. Submits to the
 // dashboard route's action (see the `intent` field) rather than having a
 // page of its own.
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Form } from "react-router";
 
 // Picks white or black text for readability against an arbitrary tribe
@@ -43,6 +43,7 @@ export function WeeklyPicksModal({
   error?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const tribeRosterId = useId();
   // Pre-fill with whatever the player already picked for this episode, if
   // anything.
   const [eliminationPickId, setEliminationPickId] = useState<number | "">(
@@ -176,24 +177,46 @@ export function WeeklyPicksModal({
                   />
                   <div className="grid grid-cols-2 gap-2">
                     {tribes.map((tribe) => (
-                      <button
-                        key={tribe.id}
-                        type="button"
-                        onClick={() => setImmunityPickId(tribe.id)}
-                        aria-pressed={immunityPickId === tribe.id}
-                        style={
-                          immunityPickId === tribe.id
-                            ? {
-                                backgroundColor: tribe.color,
-                                borderColor: tribe.color,
-                                color: getContrastTextColor(tribe.color),
-                              }
-                            : { borderColor: tribe.color, color: tribe.color }
-                        }
-                        className="border px-3 py-2 hover:opacity-80"
-                      >
-                        {tribe.name}
-                      </button>
+                      <div key={tribe.id} className="group relative">
+                        <button
+                          type="button"
+                          onClick={() => setImmunityPickId(tribe.id)}
+                          aria-pressed={immunityPickId === tribe.id}
+                          aria-describedby={`${tribeRosterId}-${tribe.id}`}
+                          style={
+                            immunityPickId === tribe.id
+                              ? {
+                                  backgroundColor: tribe.color,
+                                  borderColor: tribe.color,
+                                  color: getContrastTextColor(tribe.color),
+                                }
+                              : { borderColor: tribe.color, color: tribe.color }
+                          }
+                          className="w-full border px-3 py-2 hover:opacity-80"
+                        >
+                          {tribe.name}
+                        </button>
+                        <div
+                          id={`${tribeRosterId}-${tribe.id}`}
+                          role="tooltip"
+                          className="invisible absolute bottom-full left-0 z-10 w-full min-w-36 pb-2 opacity-0 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+                        >
+                          <div className="border border-primary/40 bg-background p-3 text-sm text-primary shadow-lg">
+                            <p className="mb-1 font-semibold">{tribe.name} contestants</p>
+                            {contestants.some((contestant) => contestant.tribe_id === tribe.id) ? (
+                              <ul className="space-y-1">
+                                {contestants
+                                  .filter((contestant) => contestant.tribe_id === tribe.id)
+                                  .map((contestant) => (
+                                    <li key={contestant.id}>{contestant.name}</li>
+                                  ))}
+                              </ul>
+                            ) : (
+                              <p>No remaining contestants</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
