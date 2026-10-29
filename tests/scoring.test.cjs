@@ -5,7 +5,7 @@ const ts = require('typescript');
 
 function loadScoring(pool = {}) {
   const source = readFileSync('app/scoring.server.ts', 'utf8') +
-    '\nexport { getRemainingCountByEpisodeId };';
+    '\nexport { getRemainingCountByEpisodeId, scoreFinalThreePick };';
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText;
@@ -115,4 +115,17 @@ test('known finalists constrain available slots and a completed season adds no p
   assert.equal(calculateMaxPossibleScores([1], roster, drafts, [], [], 3, false).get(1), 13);
   assert.equal(calculateMaxPossibleScores([1, 2], roster, drafts, [], [], 3, true).get(1), 0);
   assert.equal(calculateMaxPossibleScores([1, 2], roster, drafts, [], [], 3, true).get(2), 12);
+});
+
+
+test('a fourth roster pick scores only for reaching the actual final three', () => {
+  const { scoreFinalThreePick, calculateMaxPossibleScores } = loadScoring();
+  assert.equal(scoreFinalThreePick({ finalPlacement: 3, isUltimatePick: false }, 3), 4);
+  assert.equal(scoreFinalThreePick({ finalPlacement: 4, isUltimatePick: false }, 3), 0);
+  assert.equal(scoreFinalThreePick({ finalPlacement: 1, isUltimatePick: true }, 3), 8);
+  const result = calculateMaxPossibleScores(
+    [1], [1, 2, 3, 4].map(id => contestant(id, false, id)),
+    [draft(1, 1, true), draft(1, 2), draft(1, 3), draft(1, 4)], [], [], 3, true,
+  );
+  assert.equal(result.get(1), 16); // Three finalists plus the original winner bonus.
 });

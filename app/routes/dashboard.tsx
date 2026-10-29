@@ -1,6 +1,8 @@
 // The "/dashboard" route: the main page a logged-in user sees. Shows either
 // a picker to build their draft (if they haven't yet) or their saved
 // roster, plus the weekly elimination/immunity picks.
+import { ExtraPick } from "../components/ExtraPick";
+import { isExtraPickOpen, saveExtraPick } from "../extra-pick.server";
 import { redirect } from "react-router";
 import type { Route } from "./+types/dashboard";
 import pool from "../db.server";
@@ -61,6 +63,7 @@ export async function loader({ request }: Route.LoaderArgs) {
        c.id,
        c.name,
        dp.is_ultimate_pick,
+       dp.is_extra_pick,
        EXISTS (
          SELECT 1 FROM episode_eliminations ee WHERE ee.contestant_id = c.id
        ) AS eliminated
@@ -74,6 +77,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     id: row.id as number,
     name: row.name as string,
     isUltimateSurvivor: row.is_ultimate_pick as boolean,
+    isExtraPick: row.is_extra_pick as boolean,
     eliminated: row.eliminated as boolean,
   }));
 
@@ -199,6 +203,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     weeklyPicks,
     hasCurrentEpisode: currentEpisode !== null,
     currentEpisodeImmunityType: currentEpisode?.immunityType ?? null,
+    extraPickOpen: isExtraPickOpen(season),
+    extraPickLockLabel: season.extraPickLockAt ? formatPacific(season.extraPickLockAt) : null,
     isDraftLocked: isLocked(season.draftLockAt),
     draftLockLabel: season.draftLockAt ? formatPacific(season.draftLockAt) : null,
     weeklyPicksLockLabel: currentEpisode
@@ -233,6 +239,12 @@ export async function action({ request }: Route.ActionArgs) {
     email: userRow.email,
   });
 
+  if (intent === "extra-pick") {
+    const result = await saveExtraPick(season.id, player.id, Number(formData.get("contestantId")));
+    if (result.error) return { intent: "extra-pick" as const, error: result.error };
+    return redirect("/dashboard");
+  }
+
   if (intent === "weekly-picks") {
     return weeklyPicksAction(player.id, season.id, formData);
   }
@@ -240,7 +252,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 // Creates the player's draft the first time, or replaces it if they already
-// have one (editing) — one of the season's finalist_count picks flagged as
+// have one (editing) — one of the season's draft_team_size picks flagged as
 // the "Ultimate Survivor" pick. Runs in a single transaction, so a failure
 // partway through can't leave a half-saved draft behind. Blocked entirely
 // once the draft has locked, since that's checked server-side too (not just
@@ -259,7 +271,7 @@ async function createOrUpdateDraftAction(
   }
 
   const seasonId = season.id;
-  const finalistCount = season.finalistCount;
+  const finalistCount = season.draftTeamSize;
 
   // `getAll` returns every checked checkbox's value; wrapping in a Set drops
   // any accidental duplicates before we validate the count.
@@ -289,6 +301,18 @@ async function createOrUpdateDraftAction(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Use the same lock as the extra-pick action, and recheck the deadline.
+    const { rows: lockedSeasons } = await client.query(
+      "SELECT draft_lock_at FROM seasons WHERE id = $1 FOR UPDATE", [seasonId],
+    );
+    const { rows: extraPicks } = await client.query(
+      "SELECT contestant_id FROM draft_picks WHERE season_id = $1 AND player_id = $2 AND is_extra_pick",
+      [seasonId, playerId],
+    );
+    if (!lockedSeasons.length || isLocked(lockedSeasons[0].draft_lock_at) || extraPicks.length) {
+      await client.query("ROLLBACK");
+      return { intent: "create-team" as const, error: "The draft is locked and can no longer be changed" };
+    }
     // Simplest correct way to handle an edit: drop the old draft and
     // re-insert the new one, rather than diffing old vs. new picks.
     await client.query(
@@ -456,19 +480,32 @@ export default function Dashboard({
         <TeamSection
           team={team}
           contestants={draftPickableContestants}
-          finalistCount={loaderData.season.finalistCount}
-          isLocked={isDraftLocked}
+          finalistCount={loaderData.season.draftTeamSize}
+          isLocked={isDraftLocked || team.some((member) => member.isExtraPick)}
           saveResult={
             actionData?.intent === "create-team" ? actionData : undefined
           }
         />
+        {loaderData.extraPickOpen && loaderData.extraPickLockLabel &&
+          team.filter((member) => !member.isExtraPick).length === loaderData.season.draftTeamSize && (
+            <ExtraPick
+              contestants={loaderData.activeContestants.filter((contestant) =>
+                !team.some((member) => !member.isExtraPick && member.id === contestant.id))}
+              currentPickId={team.find((member) => member.isExtraPick)?.id}
+              deadline={loaderData.extraPickLockLabel}
+              error={actionData?.intent === "extra-pick" ? actionData.error : undefined}
+            />
+          )}
+        {actionData?.intent === "extra-pick" && !loaderData.extraPickOpen && (
+          <p role="alert" className="text-sm text-red-500">{actionData.error}</p>
+        )}
         {!(isDraftLocked && hasTeam) && (
           <div className="space-y-1 text-center text-sm text-primary/70">
             <p>
               {isDraftLocked
                 ? `Team selection closed ${draftLockLabel} — you didn't pick a team in time.`
                 : draftLockLabel
-                  ? `You can change your final ${loaderData.season.finalistCount} until ${draftLockLabel}, after which it locks for all eternity.`
+                  ? `You can change your final ${loaderData.season.draftTeamSize} until ${draftLockLabel}, after which it locks for all eternity.`
                   : "The draft lock time hasn't been set yet."}
             </p>
           </div>
@@ -478,7 +515,7 @@ export default function Dashboard({
           finalThree={scoreBreakdown.finalThree}
           totalScore={scoreBreakdown.totalScore}
         />
-        <ScoringMetricsModal />
+        <ScoringMetricsModal extraPickEnabled={loaderData.season.extraPickEnabled} />
       </div>
     </main>
   );

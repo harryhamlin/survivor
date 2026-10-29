@@ -1,6 +1,6 @@
 // Shown on the dashboard when the logged-in user doesn't have a team yet.
 // Lets them check exactly `finalistCount` contestants (the season's
-// finalist_count — see db/schema.sql), designate one of them as their
+// draft_team_size — see db/schema.sql), designate one of them as their
 // "Ultimate Survivor" pick, and submit to create their team (handled by the
 // dashboard route's `action`).
 import { useEffect, useState } from "react";
@@ -14,7 +14,7 @@ export function TeamPicker({
   error,
 }: {
   contestants: { id: number; name: string }[];
-  // How many contestants must be drafted — the season's finalist_count (see
+  // How many contestants must be drafted — the season's draft_team_size (see
   // db/schema.sql), fetched per-season rather than a hardcoded constant.
   finalistCount: number;
   // Pre-fills the form when editing an already-saved team, rather than

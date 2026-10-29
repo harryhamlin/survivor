@@ -19,6 +19,7 @@ export function TeamSection({
     name: string;
     isUltimateSurvivor: boolean;
     eliminated: boolean;
+    isExtraPick?: boolean;
   }[];
   contestants: { id: number; name: string }[];
   finalistCount: number;

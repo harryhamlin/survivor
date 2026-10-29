@@ -185,7 +185,7 @@ export async function loader({ request }: Route.LoaderArgs) {
      FROM episodes e
      JOIN weekly_picks wp ON wp.episode_id = e.id
      WHERE e.season_id = $1
-     ORDER BY e.episode_number`,
+     ORDER BY e.episode_number DESC`,
     [season.id],
   );
   const episodeNumbers = episodesResult.rows.map(

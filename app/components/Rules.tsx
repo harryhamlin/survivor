@@ -1,9 +1,10 @@
 // Presentational component for the "/rules" page — the official rules
 // document in full, as opposed to ScoringMetricsModal's short in-app
 // summary of just the scoring mechanics.
+import { ExtraPickRules } from "./ExtraPickRules";
 import { TopBanner } from "./TopBanner";
 
-export function Rules({ displayName }: { displayName: string }) {
+export function Rules({ displayName, extraPickEnabled = false }: { displayName: string; extraPickEnabled?: boolean }) {
   return (
     <main className="min-h-screen bg-background">
       <TopBanner displayName={displayName} page="rules" />
@@ -67,6 +68,8 @@ export function Rules({ displayName }: { displayName: string }) {
             <strong>September 30 at 8:00 PM Pacific</strong>.
           </p>
         </div>
+
+        {extraPickEnabled && <ExtraPickRules />}
 
         <div className="space-y-3">
           <h2 className="text-lg font-semibold text-primary">Scoring</h2>

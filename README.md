@@ -194,3 +194,30 @@ load `.env`. The database user must be allowed to create schemas. Tests cover
 session expiry/revocation, old cookies, credential races, email confirmation and
 rollback, shared throttling and spoofed headers, form limits, and the four-character
 password policy. No new test dependency is required.
+
+## Fourth contestant window
+
+The fourth-pick feature ships disabled. The release migration adds
+`seasons.extra_pick_enabled` (default `false`) and `extra_pick_lock_at`
+(default `NULL`); neither deploying nor migrating opens the window.
+
+To open it later, set `extra_pick_enabled = true` and `extra_pick_lock_at`
+to an explicit future timestamp for the intended season. The initial
+`draft_lock_at` must already have passed. Set `extra_pick_enabled = false`
+to close it early; the deadline also closes it automatically.
+
+Players with a complete original team can add one remaining contestant and
+change only that extra pick until the deadline. Original picks and the
+Ultimate Survivor remain locked. Saved extra picks stay on the roster after
+the window closes and score 4 points for reaching the actual final three.
+
+Keep `finalist_count = 3`: it controls finalist scoring and maximum-score
+projections. `draft_team_size` controls the initial roster size independently;
+the migration preserves each existing season's initial size. Neither setting
+needs changing to open the extra-pick window.
+
+Database regression check (creates and removes an isolated schema):
+
+```sh
+EXTRA_PICK_TEST_DATABASE_URL=postgresql://localhost/postgres node --test tests/extra-pick.test.cjs
+```

@@ -56,6 +56,14 @@ CREATE TABLE IF NOT EXISTS seasons (
   draft_lock_at TIMESTAMPTZ
 );
 
+-- The initial roster size is independent of how many finalists score points.
+ALTER TABLE seasons ADD COLUMN IF NOT EXISTS draft_team_size INTEGER;
+UPDATE seasons SET draft_team_size = finalist_count WHERE draft_team_size IS NULL;
+ALTER TABLE seasons ALTER COLUMN draft_team_size SET DEFAULT 3;
+ALTER TABLE seasons ALTER COLUMN draft_team_size SET NOT NULL;
+ALTER TABLE seasons ADD COLUMN IF NOT EXISTS extra_pick_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE seasons ADD COLUMN IF NOT EXISTS extra_pick_lock_at TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS fantasy_players (
   id SERIAL PRIMARY KEY,
   display_name TEXT NOT NULL,
@@ -110,6 +118,10 @@ CREATE TABLE IF NOT EXISTS draft_picks (
   is_ultimate_pick BOOLEAN NOT NULL DEFAULT false,
   PRIMARY KEY (season_id, player_id, contestant_id)
 );
+
+ALTER TABLE draft_picks ADD COLUMN IF NOT EXISTS is_extra_pick BOOLEAN NOT NULL DEFAULT false;
+CREATE UNIQUE INDEX IF NOT EXISTS draft_picks_one_extra_pick
+  ON draft_picks (season_id, player_id) WHERE is_extra_pick;
 
 CREATE UNIQUE INDEX IF NOT EXISTS draft_picks_one_ultimate_pick
   ON draft_picks (season_id, player_id)

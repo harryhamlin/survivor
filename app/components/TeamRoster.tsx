@@ -4,11 +4,11 @@
 export function TeamRoster({
   team,
 }: {
-  team: { name: string; isUltimateSurvivor: boolean; eliminated: boolean }[];
+  team: { name: string; isUltimateSurvivor: boolean; eliminated: boolean; isExtraPick?: boolean }[];
 }) {
   return (
     <div className="space-y-1">
-      <p className="text-sm text-primary/70">your final 3</p>
+      <p className="text-sm text-primary/70">{team.some((member) => member.isExtraPick) ? "your final 3 picks + extra contestant" : "your final 3"}</p>
       <div className="border border-primary/40 p-4">
         <ul className="space-y-1">
           {team.map((member) => (
@@ -19,6 +19,7 @@ export function TeamRoster({
                   (ultimate survivor)
                 </span>
               )}
+              {member.isExtraPick && <span className="ml-2 text-sm text-primary/70">(extra pick)</span>}
               {member.eliminated && (
                 <span className="ml-2 text-sm text-primary/70">
                   - eliminated
