@@ -4,7 +4,7 @@
 import { ExtraPickRules } from "./ExtraPickRules";
 import { useState } from "react";
 
-export function ScoringMetricsModal({ extraPickEnabled = false }: { extraPickEnabled?: boolean }) {
+export function ScoringMetricsModal({ extraPickEnabled = false, extraPickDeadline }: { extraPickEnabled?: boolean; extraPickDeadline?: string }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -30,7 +30,7 @@ export function ScoringMetricsModal({ extraPickEnabled = false }: { extraPickEna
             role="dialog"
             aria-modal="true"
             aria-labelledby="scoring-metrics-title"
-            className="w-full max-w-sm space-y-4 border border-primary/40 bg-background p-6"
+            className="max-h-[90dvh] w-full max-w-sm space-y-4 overflow-y-auto border border-primary/40 bg-background p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -50,7 +50,12 @@ export function ScoringMetricsModal({ extraPickEnabled = false }: { extraPickEna
               </button>
             </div>
             <div className="space-y-3 text-primary/80">
-              {extraPickEnabled && <ExtraPickRules />}
+              {(extraPickEnabled || extraPickDeadline) && (
+                <div className="space-y-1">
+                  <p className="font-medium text-primary">Fourth contestant — Final 3 update</p>
+                  <ExtraPickRules deadline={extraPickDeadline} />
+                </div>
+              )}
               <div>
                 <p className="font-medium text-primary">Weekly picks</p>
                 <p className="text-sm">
@@ -83,11 +88,12 @@ export function ScoringMetricsModal({ extraPickEnabled = false }: { extraPickEna
                 <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
                   <li>
                     +4 points for each of your team&apos;s picks who makes
-                    the final 3.
+                    the actual Final 3, up to 12 finalist points total.
                   </li>
                   <li>
                     +4 bonus points if your Ultimate Survivor pick wins the
-                    season.
+                    season. This remains your original Ultimate Survivor
+                    selection and cannot be changed.
                   </li>
                 </ul>
               </div>

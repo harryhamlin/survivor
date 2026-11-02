@@ -3,7 +3,7 @@
 import type { Route } from "./+types/rules";
 import pool from "../db.server";
 import { requireUserId } from "../session.server";
-import { getCurrentSeason } from "../season.server";
+import { formatPacific, getCurrentSeason } from "../season.server";
 import { Rules } from "../components/Rules";
 
 export function meta({}: Route.MetaArgs) {
@@ -23,9 +23,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   const displayName = userRow.name ?? userRow.email;
 
   const season = await getCurrentSeason();
-  return { displayName, extraPickEnabled: season?.extraPickEnabled ?? false };
+  return {
+    displayName,
+    extraPickEnabled: season?.extraPickEnabled ?? false,
+    extraPickDeadline: season?.extraPickLockAt ? formatPacific(season.extraPickLockAt) : undefined,
+  };
 }
 
 export default function RulesRoute({ loaderData }: Route.ComponentProps) {
-  return <Rules displayName={loaderData.displayName} extraPickEnabled={loaderData.extraPickEnabled} />;
+  return <Rules displayName={loaderData.displayName} extraPickEnabled={loaderData.extraPickEnabled} extraPickDeadline={loaderData.extraPickDeadline} />;
 }

@@ -4,7 +4,8 @@
 import { ExtraPickRules } from "./ExtraPickRules";
 import { TopBanner } from "./TopBanner";
 
-export function Rules({ displayName, extraPickEnabled = false }: { displayName: string; extraPickEnabled?: boolean }) {
+export function Rules({ displayName, extraPickEnabled = false, extraPickDeadline }: { displayName: string; extraPickEnabled?: boolean; extraPickDeadline?: string }) {
+  const hasFourthPickRules = extraPickEnabled || !!extraPickDeadline;
   return (
     <main className="min-h-screen bg-background">
       <TopBanner displayName={displayName} page="rules" />
@@ -20,10 +21,18 @@ export function Rules({ displayName, extraPickEnabled = false }: { displayName: 
             Simplified Overview
           </h2>
           <p className="text-sm">
-            You&apos;ll submit your predicted <strong>Final 3 survivors</strong>{" "}
+            You&apos;ll initially submit your predicted <strong>Final 3 survivors</strong>{" "}
             and choose which of them you think will be the{" "}
             <strong>Ultimate Survivor</strong>.
           </p>
+          {hasFourthPickRules && (
+            <p className="text-sm">
+              During the fourth-pick window, add one remaining contestant to
+              your prediction. The top three of your four picks count toward
+              Final 3 scoring. Your original three picks and Ultimate Survivor
+              stay locked.
+            </p>
+          )}
           <p className="text-sm">Then, each week:</p>
           <ol className="list-decimal space-y-1 pl-5 text-sm">
             <li>Pick the contestant you think will be eliminated that episode.</li>
@@ -44,7 +53,7 @@ export function Rules({ displayName, extraPickEnabled = false }: { displayName: 
           </p>
           <ul className="list-disc space-y-1 pl-5 text-sm">
             <li>
-              <strong>Final 3:</strong> Select the three contestants you think
+              <strong>Final 3:</strong> Initially select the three contestants you think
               will make the Final 3, and designate one of them as your
               Ultimate Survivor.
             </li>
@@ -64,12 +73,17 @@ export function Rules({ displayName, extraPickEnabled = false }: { displayName: 
             contests.
           </p>
           <p className="text-sm">
-            Final 3 picks are due{" "}
+            Original Final 3 and Ultimate Survivor picks were due{" "}
             <strong>September 30 at 8:00 PM Pacific</strong>.
           </p>
         </div>
 
-        {extraPickEnabled && <ExtraPickRules />}
+        {hasFourthPickRules && (
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold text-primary">Fourth contestant — Final 3 update</h2>
+            <ExtraPickRules deadline={extraPickDeadline} />
+          </div>
+        )}
 
         <div className="space-y-3">
           <h2 className="text-lg font-semibold text-primary">Scoring</h2>
@@ -99,6 +113,14 @@ export function Rules({ displayName, extraPickEnabled = false }: { displayName: 
             <li>
               Correct Ultimate Survivor: <strong>4-point bonus</strong>
             </li>
+            {hasFourthPickRules && (
+              <li>
+                With a fourth pick, only the top three of your four selections
+                count toward Final 3 scoring: up to <strong>12 finalist points</strong>,
+                plus the unchanged Ultimate Survivor bonus. Fourth place earns
+                no finalist points.
+              </li>
+            )}
           </ul>
         </div>
 
@@ -113,8 +135,9 @@ export function Rules({ displayName, extraPickEnabled = false }: { displayName: 
               Weekly Challenge Pick contests.
             </li>
             <li>
-              Final 3 picks are due{" "}
+              Original Final 3 and Ultimate Survivor picks were due{" "}
               <strong>September 30 at 8:00 PM Pacific</strong>.
+              {hasFourthPickRules && " The fourth-pick window does not reopen those original selections; only your additional pick can be changed before its separate deadline above."}
             </li>
             <li>
               Weekly Elimination Picks and Weekly Challenge Picks are judged
