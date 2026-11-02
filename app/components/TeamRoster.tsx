@@ -8,7 +8,7 @@ export function TeamRoster({
 }) {
   return (
     <div className="space-y-1">
-      <p className="text-sm text-primary/70">{team.some((member) => member.isExtraPick) ? "your final 3 picks + extra contestant" : "your final 3"}</p>
+      <p className="text-sm text-primary/70">your final 3 picks</p>
       <div className="border border-primary/40 p-4">
         <ul className="space-y-1">
           {team.map((member) => (

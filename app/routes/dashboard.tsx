@@ -2,6 +2,7 @@
 // a picker to build their draft (if they haven't yet) or their saved
 // roster, plus the weekly elimination/immunity picks.
 import { ExtraPick } from "../components/ExtraPick";
+import { useEffect, useRef, useState } from "react";
 import { isExtraPickOpen, saveExtraPick } from "../extra-pick.server";
 import { redirect } from "react-router";
 import type { Route } from "./+types/dashboard";
@@ -419,6 +420,23 @@ export default function Dashboard({
   actionData,
 }: Route.ComponentProps) {
   const { user } = loaderData;
+  const [editingExtraPick, setEditingExtraPick] = useState(false);
+  const extraPickBox = useRef<HTMLDivElement>(null);
+
+  // Successful saves redirect and reload the roster; failed saves keep the
+  // form open so the player can correct their selection.
+  useEffect(() => {
+    if (actionData?.intent !== "extra-pick" || !actionData.error) {
+      setEditingExtraPick(false);
+    }
+  }, [loaderData, actionData]);
+
+  useEffect(() => {
+    if (editingExtraPick) {
+      extraPickBox.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      extraPickBox.current?.querySelector("select")?.focus({ preventScroll: true });
+    }
+  }, [editingExtraPick]);
 
   if (!loaderData.season) {
     return (
@@ -447,20 +465,25 @@ export default function Dashboard({
     scoreBreakdown,
   } = loaderData;
   const hasTeam = team.length > 0;
+  const extraPick = team.find((member) => member.isExtraPick);
+  const canEditExtraPick = loaderData.extraPickOpen && loaderData.extraPickLockLabel &&
+    team.filter((member) => !member.isExtraPick).length === loaderData.season.draftTeamSize;
+  const showExtraPick = canEditExtraPick && (!extraPick || editingExtraPick);
 
   return (
     <main className="min-h-screen bg-background">
       <TopBanner displayName={user.name ?? user.email} page="dashboard" />
       <div className="mx-auto max-w-2xl space-y-8 px-4 py-12">
-        {loaderData.extraPickOpen && loaderData.extraPickLockLabel &&
-          team.filter((member) => !member.isExtraPick).length === loaderData.season.draftTeamSize && (
+        {showExtraPick && (
+          <div id="fourth-pick" ref={extraPickBox}>
             <ExtraPick
               contestants={loaderData.activeContestants.filter((contestant) =>
                 !team.some((member) => !member.isExtraPick && member.id === contestant.id))}
-              currentPickId={team.find((member) => member.isExtraPick)?.id}
-              deadline={loaderData.extraPickLockLabel}
+              currentPickId={extraPick?.id}
+              deadline={loaderData.extraPickLockLabel!}
               error={actionData?.intent === "extra-pick" ? actionData.error : undefined}
             />
+          </div>
           )}
         {actionData?.intent === "extra-pick" && !loaderData.extraPickOpen && (
           <p role="alert" className="text-sm text-red-500">{actionData.error}</p>
@@ -490,15 +513,27 @@ export default function Dashboard({
             No episode is currently open for picks.
           </p>
         )}
-        <TeamSection
-          team={team}
-          contestants={draftPickableContestants}
-          finalistCount={loaderData.season.draftTeamSize}
-          isLocked={isDraftLocked || team.some((member) => member.isExtraPick)}
-          saveResult={
-            actionData?.intent === "create-team" ? actionData : undefined
-          }
-        />
+        <div className="space-y-2">
+          <TeamSection
+            team={team}
+            contestants={draftPickableContestants}
+            finalistCount={loaderData.season.draftTeamSize}
+            isLocked={isDraftLocked || team.some((member) => member.isExtraPick)}
+            saveResult={
+              actionData?.intent === "create-team" ? actionData : undefined
+            }
+          />
+          {canEditExtraPick && extraPick && !editingExtraPick && (
+            <button
+              type="button"
+              onClick={() => setEditingExtraPick(true)}
+              aria-controls="fourth-pick"
+              className="text-sm text-primary/70 hover:underline"
+            >
+              change 4th pick
+            </button>
+          )}
+        </div>
         {!(isDraftLocked && hasTeam) && (
           <div className="space-y-1 text-center text-sm text-primary/70">
             <p>
