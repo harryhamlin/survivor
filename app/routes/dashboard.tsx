@@ -452,6 +452,19 @@ export default function Dashboard({
     <main className="min-h-screen bg-background">
       <TopBanner displayName={user.name ?? user.email} page="dashboard" />
       <div className="mx-auto max-w-2xl space-y-8 px-4 py-12">
+        {loaderData.extraPickOpen && loaderData.extraPickLockLabel &&
+          team.filter((member) => !member.isExtraPick).length === loaderData.season.draftTeamSize && (
+            <ExtraPick
+              contestants={loaderData.activeContestants.filter((contestant) =>
+                !team.some((member) => !member.isExtraPick && member.id === contestant.id))}
+              currentPickId={team.find((member) => member.isExtraPick)?.id}
+              deadline={loaderData.extraPickLockLabel}
+              error={actionData?.intent === "extra-pick" ? actionData.error : undefined}
+            />
+          )}
+        {actionData?.intent === "extra-pick" && !loaderData.extraPickOpen && (
+          <p role="alert" className="text-sm text-red-500">{actionData.error}</p>
+        )}
         {hasCurrentEpisode && currentEpisodeImmunityType ? (
           <>
             <WeeklyPicksModal
@@ -486,19 +499,6 @@ export default function Dashboard({
             actionData?.intent === "create-team" ? actionData : undefined
           }
         />
-        {loaderData.extraPickOpen && loaderData.extraPickLockLabel &&
-          team.filter((member) => !member.isExtraPick).length === loaderData.season.draftTeamSize && (
-            <ExtraPick
-              contestants={loaderData.activeContestants.filter((contestant) =>
-                !team.some((member) => !member.isExtraPick && member.id === contestant.id))}
-              currentPickId={team.find((member) => member.isExtraPick)?.id}
-              deadline={loaderData.extraPickLockLabel}
-              error={actionData?.intent === "extra-pick" ? actionData.error : undefined}
-            />
-          )}
-        {actionData?.intent === "extra-pick" && !loaderData.extraPickOpen && (
-          <p role="alert" className="text-sm text-red-500">{actionData.error}</p>
-        )}
         {!(isDraftLocked && hasTeam) && (
           <div className="space-y-1 text-center text-sm text-primary/70">
             <p>
