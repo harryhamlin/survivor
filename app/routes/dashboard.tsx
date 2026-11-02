@@ -550,10 +550,7 @@ export default function Dashboard({
           finalThree={scoreBreakdown.finalThree}
           totalScore={scoreBreakdown.totalScore}
         />
-        <ScoringMetricsModal
-          extraPickEnabled={loaderData.season.extraPickEnabled}
-          extraPickDeadline={loaderData.extraPickLockLabel ?? undefined}
-        />
+        <ScoringMetricsModal />
       </div>
     </main>
   );

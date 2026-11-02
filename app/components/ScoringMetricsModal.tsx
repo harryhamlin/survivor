@@ -1,10 +1,9 @@
 // A link + modal, self-contained: clicking "Scoring metrics" opens an
 // overlay with the scoring rules. Purely client-side state (open/closed) —
 // no server round trip needed for this.
-import { ExtraPickRules } from "./ExtraPickRules";
 import { useState } from "react";
 
-export function ScoringMetricsModal({ extraPickEnabled = false, extraPickDeadline }: { extraPickEnabled?: boolean; extraPickDeadline?: string }) {
+export function ScoringMetricsModal() {
   const [open, setOpen] = useState(false);
 
   return (
@@ -50,12 +49,6 @@ export function ScoringMetricsModal({ extraPickEnabled = false, extraPickDeadlin
               </button>
             </div>
             <div className="space-y-3 text-primary/80">
-              {(extraPickEnabled || extraPickDeadline) && (
-                <div className="space-y-1">
-                  <p className="font-medium text-primary">Fourth contestant — Final 3 update</p>
-                  <ExtraPickRules deadline={extraPickDeadline} />
-                </div>
-              )}
               <div>
                 <p className="font-medium text-primary">Weekly picks</p>
                 <p className="text-sm">
