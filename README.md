@@ -197,9 +197,10 @@ password policy. No new test dependency is required.
 
 ## Fourth contestant window
 
-The fourth-pick feature ships disabled. The release migration adds
-`seasons.extra_pick_enabled` (default `false`) and `extra_pick_lock_at`
-(default `NULL`); neither deploying nor migrating opens the window.
+The release migration opens the current active season's fourth-pick window
+using the next weekly picks deadline, provided the original draft has locked
+and no fourth-pick deadline has been set. The stored deadline is preserved on
+later releases, so deployment never extends or reopens an existing window.
 
 To open it later, set `extra_pick_enabled = true` and `extra_pick_lock_at`
 to an explicit future timestamp for the intended season. The initial

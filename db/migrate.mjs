@@ -59,6 +59,29 @@ const alreadyExisted = new Set(existingTables.map((row) => row.tablename));
 // block — in a single call.
 await pool.query(schema);
 
+// Open the current season's fourth-pick window once, using its next weekly
+// deadline. Keeping the stored deadline prevents later releases from extending
+// the window or reopening it after it closes.
+const { rows: openedWindows } = await pool.query(`
+  UPDATE seasons s
+  SET extra_pick_enabled = true,
+      extra_pick_lock_at = (
+        SELECT e.picks_lock_at FROM episodes e
+        WHERE e.season_id = s.id AND e.picks_lock_at > now()
+        ORDER BY e.episode_number ASC LIMIT 1
+      )
+  WHERE s.id = (SELECT id FROM seasons WHERE status = 'active' ORDER BY id DESC LIMIT 1)
+    AND s.draft_lock_at <= now()
+    AND s.extra_pick_lock_at IS NULL
+    AND EXISTS (
+      SELECT 1 FROM episodes e WHERE e.season_id = s.id AND e.picks_lock_at > now()
+    )
+  RETURNING id, extra_pick_lock_at
+`);
+for (const window of openedWindows) {
+  console.log(`Opened fourth-pick window for season ${window.id} until ${window.extra_pick_lock_at.toISOString()}`);
+}
+
 for (const table of TABLES) {
   console.log(
     alreadyExisted.has(table)

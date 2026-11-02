@@ -1,4 +1,5 @@
 import { Form, useNavigation } from "react-router";
+import { ExtraPickRules } from "./ExtraPickRules";
 
 export function ExtraPick({ contestants, currentPickId, deadline, error }: {
   contestants: { id: number; name: string }[];
@@ -11,11 +12,7 @@ export function ExtraPick({ contestants, currentPickId, deadline, error }: {
   return (
     <div className="space-y-3 border border-primary/40 p-4">
       <h2 className="text-lg text-primary">{currentPickId ? "Edit your fourth contestant" : "Add a fourth contestant"}</h2>
-      <p className="text-sm text-primary/70">
-        Add one contestant to your team. Your original picks and Ultimate Survivor stay locked.
-        Your extra pick earns 4 points if they reach the final 3.
-      </p>
-      <p className="text-sm text-primary/70">You can change this pick until {deadline}.</p>
+      <ExtraPickRules deadline={deadline} />
       <Form method="post" className="space-y-3">
         <input type="hidden" name="intent" value="extra-pick" />
         <label htmlFor="extraContestantId" className="block text-sm text-primary/70">Fourth contestant</label>
