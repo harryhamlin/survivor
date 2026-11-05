@@ -7,7 +7,7 @@ export function Leaderboard({
   standings,
   isLoggedIn,
 }: {
-  standings: { playerId: number; name: string; score: number }[];
+  standings: { playerId: number; name: string; score: number; rank: number }[];
   isLoggedIn: boolean;
 }) {
   return (
@@ -29,13 +29,13 @@ export function Leaderboard({
           </div>
           {standings.length > 0 ? (
             <ul>
-              {standings.map((entry, index) => (
+              {standings.map((entry) => (
                 <li
                   key={entry.playerId}
                   className="flex items-center justify-between border-b border-primary/20 px-4 py-3 last:border-b-0"
                 >
                   <span className="text-primary">
-                    <span className="mr-2 text-primary/50">{index + 1}.</span>
+                    <span className="mr-2 text-primary/50">{entry.rank}.</span>
                     {entry.name}
                   </span>
                   <span className="font-medium text-primary">

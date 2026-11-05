@@ -32,7 +32,7 @@ export async function loader({ request }: Route.LoaderArgs) {
      FROM fantasy_players fp
      JOIN users u ON u.id = fp.user_id`,
   );
-  const standings = playersResult.rows
+  const sortedStandings = playersResult.rows
     .map((row) => ({
       playerId: row.player_id as number,
       // Shows their name, not their email, on this public page — falls
@@ -43,6 +43,17 @@ export async function loader({ request }: Route.LoaderArgs) {
     }))
     .sort((a, b) => b.score - a.score || b.maxPossibleScore - a.maxPossibleScore ||
       a.name.localeCompare(b.name));
+
+  // Tied scores share a place; the next score skips the occupied places.
+  let rank = 0;
+  let previousScore: number | null = null;
+  const standings = sortedStandings.map((entry, index) => {
+    if (entry.score !== previousScore) {
+      rank = index + 1;
+      previousScore = entry.score;
+    }
+    return { ...entry, rank };
+  });
 
   return { standings, isLoggedIn: userId !== null };
 }
