@@ -9,6 +9,7 @@ import { getCurrentSeason } from "../season.server";
 import { getOrCreateFantasyPlayer } from "../players.server";
 import {
   getSeasonScores,
+  getPreviousWeekScores,
   getSeasonMaxPossibleScores,
   getEpisodeScoringInfo,
   isPredictionCorrect,
@@ -60,6 +61,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const scores = await getSeasonScores(season.id, season.finalistCount);
   const scoreByPlayerId = new Map(scores.map((s) => [s.playerId, s.score]));
+  const previousScores = await getPreviousWeekScores(season.id);
+  const previousScoreByPlayerId = new Map(previousScores.map((s) => [s.playerId, s.score]));
   const maxByPlayerId = await getSeasonMaxPossibleScores(season.id, season.finalistCount);
 
   // One row per fantasy player, with their draft's contestants
@@ -223,12 +226,20 @@ export async function loader({ request }: Route.LoaderArgs) {
   // not 4th, since 3 players already occupy positions 3-5.
   let rank = 0;
   let previousScore: number | null = null;
+  const previousTotals = sortedRows
+    .map((row) => previousScoreByPlayerId.get(row.playerId) ?? 0)
+    .sort((a, b) => b - a);
+  const previousRankByScore = new Map<number, number>();
+  previousTotals.forEach((score, index) => {
+    if (!previousRankByScore.has(score)) previousRankByScore.set(score, index + 1);
+  });
   const rows = sortedRows.map((row, index) => {
     if (row.score !== previousScore) {
       rank = index + 1;
       previousScore = row.score;
     }
-    return { ...row, rank };
+    const previousRank = previousRankByScore.get(previousScoreByPlayerId.get(row.playerId) ?? 0)!;
+    return { ...row, rank, rankChange: previousRank - rank };
   });
 
   return { displayName, episodeNumbers, rows, scoreBreakdown };

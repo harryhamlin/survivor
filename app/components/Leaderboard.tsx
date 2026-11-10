@@ -7,7 +7,7 @@ export function Leaderboard({
   standings,
   isLoggedIn,
 }: {
-  standings: { playerId: number; name: string; score: number; rank: number }[];
+  standings: { playerId: number; name: string; score: number; rank: number; rankChange: number }[];
   isLoggedIn: boolean;
 }) {
   return (
@@ -37,8 +37,14 @@ export function Leaderboard({
                   <span className="text-primary">
                     <span className="mr-2 text-primary/50">{entry.rank}.</span>
                     {entry.name}
+                    <span
+                      aria-label={entry.rankChange === 0 ? "No rank change" : `${entry.rankChange > 0 ? "Up" : "Down"} ${Math.abs(entry.rankChange)} ${Math.abs(entry.rankChange) === 1 ? "rank" : "ranks"}`}
+                      className={`ml-2 inline-block whitespace-nowrap text-sm tabular-nums ${entry.rankChange < 0 ? "text-red-500" : "text-primary"}`}
+                    >
+                      {entry.rankChange === 0 ? "—" : `${entry.rankChange > 0 ? "↑" : "↓"} ${Math.abs(entry.rankChange)}`}
+                    </span>
                   </span>
-                  <span className="font-medium text-primary">
+                  <span className="ml-3 shrink-0 font-medium text-primary">
                     {entry.score}
                   </span>
                 </li>

@@ -42,6 +42,7 @@ export function DetailedScores({
   rows: {
     playerId: number;
     rank: number;
+    rankChange: number;
     displayName: string;
     score: number;
     maxPossibleScore: number;
@@ -70,6 +71,9 @@ export function DetailedScores({
                 <tr>
                   <th className="whitespace-nowrap border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
                     rank
+                  </th>
+                  <th title="Rank movement since the previous scored week" className="whitespace-nowrap border-b border-r border-primary/40 bg-background px-3 py-2 text-left text-primary">
+                    change
                   </th>
                   {/* The right edge uses a box-shadow instead of border-r —
                       a `border-collapse` table's collapsed borders don't
@@ -111,6 +115,12 @@ export function DetailedScores({
                   <tr key={row.playerId}>
                     <td className="whitespace-nowrap border-b border-r border-primary/40 px-3 py-2 text-primary">
                       {row.rank}
+                    </td>
+                    <td
+                      aria-label={row.rankChange === 0 ? "No rank change" : `${row.rankChange > 0 ? "Up" : "Down"} ${Math.abs(row.rankChange)} ${Math.abs(row.rankChange) === 1 ? "rank" : "ranks"}`}
+                      className={`whitespace-nowrap border-b border-r border-primary/40 px-3 py-2 tabular-nums ${row.rankChange < 0 ? "text-red-500" : "text-primary"}`}
+                    >
+                      {row.rankChange === 0 ? "—" : `${row.rankChange > 0 ? "↑" : "↓"} ${Math.abs(row.rankChange)}`}
                     </td>
                     <td className="sticky left-0 z-10 whitespace-nowrap border-b border-primary/40 bg-background px-3 py-2 text-primary shadow-[1px_0_0_0_color-mix(in_oklab,var(--color-primary)_40%,transparent)]">
                       {row.displayName}

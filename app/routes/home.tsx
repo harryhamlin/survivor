@@ -4,7 +4,7 @@ import type { Route } from "./+types/home";
 import pool from "../db.server";
 import { getUserId } from "../session.server";
 import { getCurrentSeason } from "../season.server";
-import { getSeasonScores, getSeasonMaxPossibleScores } from "../scoring.server";
+import { getSeasonScores, getSeasonMaxPossibleScores, getPreviousWeekScores } from "../scoring.server";
 import { Leaderboard } from "../components/Leaderboard";
 
 export function meta({}: Route.MetaArgs) {
@@ -25,6 +25,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const scores = await getSeasonScores(season.id, season.finalistCount);
   const scoreByPlayerId = new Map(scores.map((s) => [s.playerId, s.score]));
+  const previousScores = await getPreviousWeekScores(season.id);
+  const previousScoreByPlayerId = new Map(previousScores.map((s) => [s.playerId, s.score]));
   const maxByPlayerId = await getSeasonMaxPossibleScores(season.id, season.finalistCount);
 
   const playersResult = await pool.query(
@@ -47,12 +49,20 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Tied scores share a place; the next score skips the occupied places.
   let rank = 0;
   let previousScore: number | null = null;
+  const previousTotals = sortedStandings
+    .map((entry) => previousScoreByPlayerId.get(entry.playerId) ?? 0)
+    .sort((a, b) => b - a);
+  const previousRankByScore = new Map<number, number>();
+  previousTotals.forEach((score, index) => {
+    if (!previousRankByScore.has(score)) previousRankByScore.set(score, index + 1);
+  });
   const standings = sortedStandings.map((entry, index) => {
     if (entry.score !== previousScore) {
       rank = index + 1;
       previousScore = entry.score;
     }
-    return { ...entry, rank };
+    const previousRank = previousRankByScore.get(previousScoreByPlayerId.get(entry.playerId) ?? 0)!;
+    return { ...entry, rank, rankChange: previousRank - rank };
   });
 
   return { standings, isLoggedIn: userId !== null };

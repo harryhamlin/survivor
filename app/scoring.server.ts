@@ -385,8 +385,23 @@ async function getRemainingCountByEpisodeId(
   return remainingCountByEpisodeId;
 }
 
-async function getWeeklyPickScores(seasonId: number): Promise<PlayerScore[]> {
-  const infoByEpisodeId = await getEpisodeScoringInfo(seasonId);
+// Standings immediately before the latest graded episode. Final-three and
+// winner bonuses belong to the finale, so they are absent from this baseline.
+// Future episodes with open picks do not advance the comparison week.
+export async function getPreviousWeekScores(seasonId: number): Promise<PlayerScore[]> {
+  const info = await getEpisodeScoringInfo(seasonId);
+  const latestEpisode = Math.max(0, ...Array.from(info.values())
+    .filter((episode) => episode.eliminationStatus !== "pending" || episode.immunityStatus !== "pending")
+    .map((episode) => episode.episodeNumber));
+  return getWeeklyPickScores(seasonId, latestEpisode, info);
+}
+
+async function getWeeklyPickScores(
+  seasonId: number,
+  beforeEpisodeNumber = Infinity,
+  episodeInfo?: Map<number, EpisodeScoringInfo>,
+): Promise<PlayerScore[]> {
+  const infoByEpisodeId = episodeInfo ?? await getEpisodeScoringInfo(seasonId);
   const remainingCountByEpisodeId = await getRemainingCountByEpisodeId(
     seasonId,
     infoByEpisodeId,
@@ -405,7 +420,7 @@ async function getWeeklyPickScores(seasonId: number): Promise<PlayerScore[]> {
   for (const row of pickRows) {
     const episodeId = row.episode_id as number;
     const info = infoByEpisodeId.get(episodeId);
-    if (!info) continue;
+    if (!info || info.episodeNumber >= beforeEpisodeNumber) continue;
 
     const playerId = row.player_id as number;
     const eliminationPickId = row.elimination_pick_id as number | null;

@@ -55,6 +55,37 @@ test('a non-scoring departure stays eliminated while the legitimate boot scores'
 });
 
 const contestant = (id, eliminated = false, finalPlacement = null) => ({ id, eliminated, finalPlacement });
+
+test('previous week excludes the latest graded episode and ignores future open picks', async () => {
+  const { getPreviousWeekScores } = loadScoring({
+    async query(sql) {
+      if (sql.startsWith('SELECT id, episode_number, immunity_type FROM episodes')) return { rows:
+        [1, 2, 3].map((id) => ({ id, episode_number: id, immunity_type: 'tribe' })),
+      };
+      if (sql.includes('FROM episode_eliminations')) return { rows: [
+        { episode_id: 1, contestant_id: 10, counts_for_scoring: true },
+        { episode_id: 2, contestant_id: 11, counts_for_scoring: true },
+      ] };
+      if (sql.includes('FROM episode_immunity_winners')) return { rows: [
+        { episode_id: 1, tribe_id: 3 }, { episode_id: 2, tribe_id: 3 },
+      ] };
+      if (sql.includes('FROM episode_scoring')) return { rows: [1, 2].flatMap((episode_id) =>
+        ['elimination', 'immunity'].map((category) => ({ episode_id, category, status: 'active' }))),
+      };
+      if (sql.includes('count(*)')) return { rows: [{ count: 10 }] };
+      if (sql.includes('FROM weekly_picks')) return { rows: [
+        { player_id: 1, episode_id: 1, elimination_pick_id: 10, immunity_tribe_pick_id: 3 },
+        { player_id: 2, episode_id: 1, elimination_pick_id: 11, immunity_tribe_pick_id: 3 },
+        { player_id: 2, episode_id: 2, elimination_pick_id: 11, immunity_tribe_pick_id: 3 },
+        { player_id: 2, episode_id: 3, elimination_pick_id: 12, immunity_tribe_pick_id: 3 },
+      ] };
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  });
+  assert.deepEqual(await getPreviousWeekScores(1), [
+    { playerId: 1, score: 4 }, { playerId: 2, score: 1 },
+  ]);
+});
 const draft = (playerId, contestantId, isUltimatePick = false) => ({ playerId, contestantId, isUltimatePick });
 const episode = (overrides = {}) => ({
   id: 1, episodeNumber: 1, picksOpen: true, hasResults: false,
