@@ -3,8 +3,8 @@ import { useState } from "react";
 import { data, Form, redirect, useFetcher } from "react-router";
 import type { Route } from "./+types/training-record";
 import { editLockedDay, getLockedDay, listExercises, recordSession, requireTrainingUser, workoutName } from "../training/data.server";
-import { defaultLoggedSets, formatDate, maxLoggedSets, movementFocuses, trainingPath, unitLabels, type Exercise } from "../training/model";
-import { BackLink, FormMessage, PageTitle, SaveButton, ExerciseAuthor } from "../training/ui";
+import { defaultLoggedSets, formatDate, maxLoggedSets, trainingPath, unitLabels } from "../training/model";
+import { BackLink, ExerciseOptions, FormMessage, PageTitle, SaveButton, ExerciseAuthor } from "../training/ui";
 import { readFormData } from "../security.server";
 
 export const meta = ({ loaderData }: Route.MetaArgs) => [{ title: (loaderData?.name ?? "Log session") + " | Torchsnuffers Training" }];
@@ -23,15 +23,6 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
   const error = await editLockedDay(userId, params.date, form);
   return error ? data({ error }, { status: 400 }) : null;
-}
-
-function ExerciseOptions({ exercises }: { exercises: Exercise[] }) {
-  return movementFocuses.map(focus => {
-    const options = exercises.filter(e => e.focus === focus);
-    return options.length ? <optgroup key={focus} label={focus}>
-      {options.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-    </optgroup> : null;
-  });
 }
 
 export default function Record({ loaderData: { day, name, exercises, submission }, actionData }: Route.ComponentProps) {

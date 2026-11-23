@@ -28,6 +28,8 @@ export interface PlannedExercise extends Exercise {
   position: number;
 }
 export const defaultLoggedSets = 3;
+// The weekly plan's "switch to" value that clears a day instead of naming an exercise.
+export const restChoice = "rest";
 export interface RecordedMovement {
   author_name: string;
   name: string;

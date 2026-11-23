@@ -268,6 +268,10 @@ each day's type.
 
 Each weekday's **Swap** link opens a picker that trades that day's whole contents (type,
 exercises and pins) with another weekday.
+Each planned exercise has a **Switch** link that replaces it in place with
+another library exercise. A pinned exercise passes its pin to the replacement,
+which must fit the same pin rules. The same picker can make the whole day a rest
+day, clearing its exercises and pins.
 
 Below the schedule, **Lock in this week** copies the plan onto the dated
 Monday–Sunday containing the browser's today (`training_locked_days` and

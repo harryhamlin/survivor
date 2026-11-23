@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigation } from "react-router";
-import { localToday, movementFocuses, muscleGroups, trainingGoals, trainingPath, type TrainingFocus } from "./model";
+import { localToday, movementFocuses, muscleGroups, trainingGoals, trainingPath, type Exercise, type TrainingFocus } from "./model";
 
 export function PageTitle({ title, children }: { title: string; children?: ReactNode }) {
   return <div className="tr-title"><h1>{title}</h1>{children}</div>;
@@ -40,6 +40,16 @@ export function FocusFields() {
     <CheckboxGroup label="Training goals" name="goals" options={trainingGoals} hint="Choose one or more."/>
     <CheckboxGroup label="Muscle groups" name="muscle_groups" options={muscleGroups} hint="Choose one or more."/>
   </>;
+}
+
+// <option>s for a <select>, grouped by movement focus.
+export function ExerciseOptions({ exercises }: { exercises: Pick<Exercise, "id" | "name" | "focus">[] }) {
+  return movementFocuses.map(focus => {
+    const options = exercises.filter(e => e.focus === focus);
+    return options.length ? <optgroup key={focus} label={focus}>
+      {options.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+    </optgroup> : null;
+  });
 }
 
 export function FocusSummary({ focus, goals, muscle_groups }: TrainingFocus) {

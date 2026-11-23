@@ -170,6 +170,31 @@ test("training routes share accounts, isolate private libraries and save perform
     await swapDays("1", "7");
     await swapDays("1", "3", b);
     assert.deepEqual([await readWeek(), await readKinds()], [beforeSwap, kindsBeforeSwap]);
+    // Switch planned exercises in place, then turn a day into a rest day.
+    const switchTo = (day, exercise, replacement, cookie = a) =>
+      post(weeklyPath, { intent: "switch", day, exercise, replacement }, cookie);
+    const mondayRow = (await readWeek()).find(e => e.day === 1 && !e.pinned && e.id !== "Plank");
+    for (const [day, from, to] of [["1", mondayRow.id, "Other user lift"], ["1", "missing", "Bike"], ["8", mondayRow.id, "Bike"],
+      ["1", mondayRow.id, exercise.id]]) assert.equal((await switchTo(day, from, to)).status, 400);
+    assert.equal((await switchTo("1", mondayRow.id, "Bike", b)).status, 400);
+    // A pin passes to its replacement, which has to fit the same rules as any other pin.
+    assert.equal((await add("1", "Plank")).status, 302);
+    assert.equal((await switchTo("1", "Plank", "Bike")).status, 400);
+    assert.equal((await switchTo("1", exercise.id, "Other press")).headers.get("Location"), weeklyPath);
+    assert.deepEqual((await readWeek()).find(e => e.id === "Other press"), { day: 1, id: "Other press", pinned: true });
+    assert.equal((await switchTo("1", mondayRow.id, "Bike")).status, 302);
+    assert.deepEqual((await readWeek()).filter(e => e.day === 1).map(e => e.id), beforeSwap.filter(e => e.day === 1)
+      .map(e => ({ [exercise.id]: "Other press", [mondayRow.id]: "Bike" })[e.id] ?? e.id));
+    assert.equal((await readKinds()).find(k => k.day === 1).kind, "Strength");
+    assert.equal((await switchTo("3", "Bike", "rest")).status, 302);
+    assert.ok(!(await readWeek()).some(e => e.day === 3));
+    assert.equal((await readKinds()).find(k => k.day === 3).kind, "Rest");
+    assert.match(await (await get(weeklyPath, a)).text(), /Switch/);
+    // Restore the earlier pins for the rest of the test.
+    assert.equal((await switchTo("1", "Other press", exercise.id)).status, 302);
+    assert.equal((await post(weeklyPath, { intent: "remove", day: "1", exercise: "Plank" }, a)).status, 302);
+    assert.equal((await add("3", "Bike")).status, 302);
+    assert.equal((await post(weeklyPath, fill, a)).status, 302);
     // Chosen rest days stay free; the rest of the week is still filled.
     for (const [restDays, extra] of [[["2", "2"]], [["9"]], [["1"]], [["2", "4", "5", "6"], { endurance_days: "2" }]]) {
       const body = new URLSearchParams({ ...fill, ...extra });

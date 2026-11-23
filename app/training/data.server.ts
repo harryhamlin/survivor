@@ -4,7 +4,7 @@ import { redirect } from "react-router";
 import pool from "../db.server";
 import { getUserId } from "../session.server";
 import {
-  addDays, dayOfWeek, exerciseUnits, isoDate, maxLoggedSets, movementFocuses, muscleGroups, trainingGoals, trainingPath,
+  addDays, dayOfWeek, exerciseUnits, restChoice, isoDate, maxLoggedSets, movementFocuses, muscleGroups, trainingGoals, trainingPath,
   weekdays, weekStart,
 } from "./model";
 import { exerciseSources, generateWeek, pinConflict, planError, type DayKind, type PinnedExercise } from "./generator";
@@ -189,6 +189,48 @@ export async function swapWeeklyDays(userId: number, form: FormData) {
     await client.query(`INSERT INTO training_weekly_days (user_id, day_of_week, kind)
       SELECT $1, d, k FROM unnest($2::smallint[], $3::text[]) AS t(d, k)`,
       [userId, kinds.map(k => other(k.day_of_week)), kinds.map(k => k.kind)]);
+  });
+}
+
+// Replaces one planned exercise in place, or turns the whole day into a rest day.
+// A pinned exercise hands its pin to the replacement, so it must fit the same pin rules.
+export async function switchWeeklyExercise(userId: number, form: FormData) {
+  const day = Number(value(form, "day"));
+  const current = value(form, "exercise"), replacement = value(form, "replacement");
+  if (!integer(day, 7) || !current || !replacement) return "Choose an exercise to switch in.";
+  return editWeek(userId, async client => {
+    if (replacement === restChoice) {
+      await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2", [userId, day]);
+      await client.query(`INSERT INTO training_weekly_days (user_id, day_of_week, kind) VALUES ($1, $2, 'Rest')
+        ON CONFLICT (user_id, day_of_week) DO UPDATE SET kind = 'Rest'`, [userId, day]);
+      return;
+    }
+    const { rows: [entry] } = await client.query<{ position: number; pinned: boolean }>(
+      "SELECT position, pinned FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2 AND exercise_id = $3",
+      [userId, day, current]);
+    if (!entry) return "That exercise is no longer planned for this day.";
+    const { rows: [candidate] } = await client.query<PinnedExercise>(
+      "SELECT $3::int AS day, id, focus, goals, muscle_groups FROM training_exercises WHERE author_id = $1 AND id = $2",
+      [userId, replacement, day]);
+    if (!candidate) return "Choose an exercise from your library.";
+    if (replacement === current) return;
+    const taken = await client.query("SELECT 1 FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2 AND exercise_id = $3",
+      [userId, day, replacement]);
+    if (taken.rowCount) return "That exercise is already planned for this day.";
+    if (entry.pinned) {
+      const conflict = pinConflict((await pinnedExercises(client, userId)).filter(p => !(p.day === day && p.id === current)), candidate);
+      if (conflict) return conflict;
+    }
+    await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2 AND exercise_id = $3",
+      [userId, day, current]);
+    await client.query(`INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id, position, pinned)
+      VALUES ($1, $2, $3, $4, $5)`, [userId, day, replacement, entry.position, entry.pinned]);
+    // Keep a generated day's type in step with what's on it now.
+    await client.query(`UPDATE training_weekly_days SET kind = (
+        SELECT CASE WHEN bool_and(e.focus = 'Cardio') THEN 'Endurance' ELSE 'Strength' END
+        FROM training_weekly_plan p JOIN training_exercises e ON e.author_id = p.user_id AND e.id = p.exercise_id
+        WHERE p.user_id = $1 AND p.day_of_week = $2
+      ) WHERE user_id = $1 AND day_of_week = $2`, [userId, day]);
   });
 }
 

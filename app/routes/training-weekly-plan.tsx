@@ -4,11 +4,11 @@ import type { Route } from "./+types/training-weekly-plan";
 import { readFormData } from "../security.server";
 import {
   generateWeeklyPlan, listExercises, listLockedDays, listWeeklyDays, listWeeklyPlan, lockWeek, lockWindow,
-  requireTrainingUser, swapWeeklyDays, updateWeeklyPlan,
+  requireTrainingUser, swapWeeklyDays, switchWeeklyExercise, updateWeeklyPlan,
 } from "../training/data.server";
 import { fullBodySlots, type DayKind, type ExerciseSource } from "../training/generator";
-import { addDays, formatDate, movementFocuses, trainingPath, weekdays, weekStart, type Exercise } from "../training/model";
-import { ExerciseAuthor, FormMessage, PageTitle, useLocalToday } from "../training/ui";
+import { addDays, formatDate, movementFocuses, restChoice, trainingPath, weekdays, weekStart, type Exercise } from "../training/model";
+import { ExerciseAuthor, ExerciseOptions, FormMessage, PageTitle, useLocalToday } from "../training/ui";
 
 export const meta = () => [{ title: "Weekly plan | Torchsnuffers Training" }];
 
@@ -27,7 +27,8 @@ export async function action({ request }: Route.ActionArgs) {
   const intent = form.get("intent");
   const error = intent === "generate" ? await generateWeeklyPlan(user, form)
     : intent === "lock" ? await lockWeek(user, form)
-    : intent === "swap-days" ? await swapWeeklyDays(user, form) : await updateWeeklyPlan(user, form);
+    : intent === "swap-days" ? await swapWeeklyDays(user, form)
+    : intent === "switch" ? await switchWeeklyExercise(user, form) : await updateWeeklyPlan(user, form);
   if (error) return data({ error }, { status: 400 });
   return redirect(trainingPath + (intent === "lock" ? "/log" : "/weekly-plan"));
 }
@@ -113,6 +114,43 @@ function DaySwap({ day, busy }: { day: number; busy: boolean }) {
   </Form>;
 }
 
+// One planned exercise. Switch opens a picker to replace it in place, or to make the whole day a rest day.
+function PlanEntry({ entry, day, busy, options }: {
+  entry: { exercise_id: string; name: string; author_name: string; pinned: boolean };
+  day: number; busy: boolean; options: Exercise[];
+}) {
+  const [switching, setSwitching] = useState(false);
+  const name = weekdays[day - 1];
+  return <li>
+    <div className="flex justify-between gap-4">
+      <div className="min-w-0 break-words"><p>{entry.name}{entry.pinned && <span className="tr-muted"> · Pinned</span>}</p><ExerciseAuthor name={entry.author_name}/></div>
+      <Form method="post" className="flex flex-wrap items-start justify-end gap-x-3">
+        <input type="hidden" name="day" value={day}/>
+        <input type="hidden" name="exercise" value={entry.exercise_id}/>
+        {!switching && <button type="button" className="tr-text-link" onClick={() => setSwitching(true)}
+          aria-label={"Switch " + entry.name + " on " + name}>Switch</button>}
+        {!entry.pinned && <button type="submit" name="intent" value="add" className="tr-text-link" disabled={busy}
+          aria-label={"Pin " + entry.name + " to " + name}>Pin</button>}
+        <button type="submit" name="intent" value="remove" className="tr-text-link" disabled={busy}
+          aria-label={"Remove " + entry.name + " from " + name}>Remove</button>
+      </Form>
+    </div>
+    {switching && <Form method="post" className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm" onSubmit={() => setSwitching(false)}>
+      <input type="hidden" name="intent" value="switch"/>
+      <input type="hidden" name="day" value={day}/>
+      <input type="hidden" name="exercise" value={entry.exercise_id}/>
+      <select name="replacement" aria-label={"Replace " + entry.name + " on " + name + " with"} required defaultValue="" autoFocus
+        className="min-w-0 flex-1 border border-primary/40 bg-background px-2 py-1 text-primary">
+        <option value="" disabled>Switch to…</option>
+        <option value={restChoice}>Make {name} a rest day</option>
+        <ExerciseOptions exercises={options.filter(e => e.id !== entry.exercise_id)}/>
+      </select>
+      <button type="submit" className="tr-text-link" disabled={busy}>Switch</button>
+      <button type="button" className="tr-text-link" onClick={() => setSwitching(false)}>Cancel</button>
+    </Form>}
+  </li>;
+}
+
 function LockWeek({ lockedDates, today: serverToday, busy, empty }: {
   lockedDates: string[]; today: string; busy: boolean; empty: boolean;
 }) {
@@ -171,17 +209,8 @@ export default function WeeklyPlan({ loaderData: { exercises, entries, days, loc
           <DaySwap day={dayNumber} busy={busy}/>
         </div>
         {planned.length ? <ul className="mt-2 space-y-2">{planned.map(entry => (
-          <li key={entry.exercise_id} className="flex justify-between gap-4">
-            <div className="min-w-0 break-words"><p>{entry.name}{entry.pinned && <span className="tr-muted"> · Pinned</span>}</p><ExerciseAuthor name={entry.author_name}/></div>
-            <Form method="post" className="flex flex-wrap items-start justify-end gap-x-3">
-              <input type="hidden" name="day" value={dayNumber}/>
-              <input type="hidden" name="exercise" value={entry.exercise_id}/>
-              {!entry.pinned && <button type="submit" name="intent" value="add" className="tr-text-link" disabled={busy}
-                aria-label={"Pin " + entry.name + " to " + day}>Pin</button>}
-              <button type="submit" name="intent" value="remove" className="tr-text-link" disabled={busy}
-                aria-label={"Remove " + entry.name + " from " + day}>Remove</button>
-            </Form>
-          </li>
+          <PlanEntry key={entry.exercise_id} entry={entry} day={dayNumber} busy={busy}
+            options={exercises.filter(e => e.id === entry.exercise_id || !planned.some(p => p.exercise_id === e.id))}/>
         ))}</ul> : <p className="tr-muted">{kind === "Rest" ? "Rest day" : "No exercises planned"}</p>}
       </section>;
     })}</div>
