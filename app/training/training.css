@@ -16,6 +16,7 @@
 :is(.tr-form, .tr-tools) .tr-choices label { @apply flex items-center gap-2 space-y-0; }
 .tr-choices input { @apply size-4 shrink-0 accent-primary; }
 .tr-choices.tr-stack { @apply grid-cols-1; }
+.tr-choices.tr-exercise-picks { @apply wrap-anywhere max-sm:grid-cols-1; }
 .tr-list { @apply divide-y divide-primary/20 border border-primary/40; }
 .tr-item summary { @apply cursor-pointer px-4 py-3 hover:bg-primary/10; }
 .tr-item summary strong { @apply break-words font-medium; }
@@ -32,7 +33,7 @@
 
 .tr-form { @apply space-y-4; }
 .tr-form label { @apply block min-w-0 space-y-1 text-sm font-medium; }
-.tr-form :is(input:not([type="hidden"], [type="checkbox"]), select, textarea), .tr-tools :is(input:not([type="checkbox"]), select) {
+.tr-form :is(input:not([type="hidden"], [type="checkbox"], [type="radio"]), select, textarea), .tr-tools :is(input:not([type="checkbox"], [type="radio"]), select) {
   @apply block w-full rounded-none border border-primary/40 bg-background px-3 py-2 text-base font-normal text-primary focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary;
 }
 .tr-form textarea { @apply resize-y; }

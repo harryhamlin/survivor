@@ -63,7 +63,7 @@ function Generator({ exercises, busy }: { exercises: Exercise[]; busy: boolean }
         const options = exercises.filter(e => e.focus === focus);
         return options.length ? <div key={focus}>
           <h3 className="mb-1 mt-3 font-semibold">{focus}</h3>
-          <div className="tr-choices">{options.map(e => <label key={e.id}>
+          <div className="tr-choices tr-exercise-picks">{options.map(e => <label key={e.id}>
             <input type="checkbox" name="pick" value={e.id}/>{e.name}
           </label>)}</div>
         </div> : null;
