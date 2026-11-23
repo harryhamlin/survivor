@@ -1,7 +1,7 @@
 export const trainingPath = "/workouts";
 export const maxLoggedSets = 16;
 export const trainingHost = "workouts.torchsnuffers.com";
-export const movementFocuses = ["Push", "Pull", "Legs", "Core"] as const;
+export const movementFocuses = ["Push", "Pull", "Legs", "Core","Butt"] as const;
 export const trainingGoals = ["Power", "Strength", "Endurance"] as const;
 export const muscleGroups = [
   "Chest", "Shoulders", "Triceps", "Biceps", "Forearms", "Lats", "Upper back",
