@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS training_exercises (
   author_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   author_name text NOT NULL CHECK (btrim(author_name) <> ''),
   name text NOT NULL,
-  focus text NOT NULL CHECK (focus IN ('Push', 'Pull', 'Legs', 'Core')),
+  focus text NOT NULL CHECK (focus IN ('Push', 'Pull', 'Legs', 'Core','Butt')),
   goals text[] NOT NULL CHECK (
     cardinality(goals) BETWEEN 1 AND 3 AND goals <@ ARRAY['Power', 'Strength', 'Endurance']
   ),
