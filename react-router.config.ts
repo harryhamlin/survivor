@@ -1,5 +1,7 @@
 import type { Config } from "@react-router/dev/config";
 
+import { trainingHost } from "./app/training/model";
+
 export default {
   // Server-side render by default, to enable SPA mode set this to `false`
   ssr: true,
@@ -11,6 +13,7 @@ export default {
   allowedActionOrigins: [
     "torchsnuffers.com",
     "www.torchsnuffers.com",
+    trainingHost,
     "survivor-hham-6f0280b70284.herokuapp.com",
   ],
 } satisfies Config;

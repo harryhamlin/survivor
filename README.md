@@ -222,3 +222,30 @@ Database regression check (creates and removes an isolated schema):
 ```sh
 EXTRA_PICK_TEST_DATABASE_URL=postgresql://localhost/postgres node --test tests/extra-pick.test.cjs
 ```
+
+## Workout tracker
+
+Open `/workouts` locally to browse the workout and exercise libraries. Existing
+Torchsnuffers accounts can add private exercises, build ordered workout plans,
+and record completed sets, weights in pounds, dates, and notes in their training
+log. Accounts are shared through the existing Postgres connection. Sign in on
+each hostname using the same credentials.
+
+Run `npm run db:migrate` before starting the app. The Heroku release phase runs
+the same migration and loads the starter libraries from `db/workouts.sql`.
+The workout hostname routes its homepage to `/workouts`.
+
+To activate the subdomain on the existing Heroku app, deploy the changes and run
+`heroku domains:add workouts.torchsnuffers.com --app survivor-hham`. At the DNS
+provider, create a CNAME named `workouts` pointing to the DNS target returned for
+this specific hostname. Verify the domain with `heroku domains --app survivor-hham`
+and its certificate with `heroku certs:auto --app survivor-hham`.
+[Heroku custom domains](https://devcenter.heroku.com/articles/custom-domains) ·
+[Certificate management](https://devcenter.heroku.com/articles/automated-certificate-management)
+
+Run the workout route regression test against a disposable localhost database:
+
+```sh
+npm run build
+TRAINING_TEST_DATABASE_URL=postgresql://localhost/postgres node --test tests/training.test.mjs
+```

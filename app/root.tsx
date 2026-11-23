@@ -8,6 +8,7 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useMatches,
 } from "react-router";
 
 import type { Route } from "./+types/root";
@@ -23,6 +24,7 @@ export const links: Route.LinksFunction = () => [
 // The actual HTML document shell. `children` is wherever the router decides
 // to render the matched route tree (via the default export below).
 export function Layout({ children }: { children: React.ReactNode }) {
+  const training = useMatches().some(match => match.id === "routes/training");
   return (
     <html lang="en">
       <head>
@@ -33,7 +35,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
-        <Footer />
+        {!training && <Footer />}
         <ScrollRestoration />
         <Scripts />
       </body>

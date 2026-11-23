@@ -1,6 +1,8 @@
 // The "/" route: a public leaderboard anyone can see without logging in,
 // with a way to log in (or jump to the dashboard, if already signed in).
 import type { Route } from "./+types/home";
+import { redirect } from "react-router";
+import { trainingHost, trainingPath } from "../training/model";
 import pool from "../db.server";
 import { getUserId } from "../session.server";
 import { getCurrentSeason } from "../season.server";
@@ -15,6 +17,7 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+  if (new URL(request.url).hostname === trainingHost) throw redirect(trainingPath);
   // Unlike requireUserId, this never redirects — the page works either way.
   const userId = await getUserId(request);
 

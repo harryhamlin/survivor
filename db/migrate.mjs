@@ -29,6 +29,10 @@ const pool = new pg.Pool({
 // table is already there — this is the only way to tell, per table, whether
 // this run actually built it or found it already in place.
 const TABLES = [
+  "training_exercises",
+  "training_workouts",
+  "training_workout_exercises",
+  "training_sessions",
   "survivor_stats",
   "tribal_episodes",
   "users",
@@ -58,6 +62,7 @@ const alreadyExisted = new Set(existingTables.map((row) => row.tablename));
 // worth of semicolon-separated statements — including the DO $$ ... $$
 // block — in a single call.
 await pool.query(schema);
+await pool.query(readFileSync(path.join(__dirname, "workouts.sql"), "utf8"));
 
 // Open the current season's fourth-pick window once, using its next weekly
 // deadline. Keeping the stored deadline prevents later releases from extending

@@ -82,11 +82,11 @@ export async function requireUserId(request: Request) {
   return userId;
 }
 
-export async function logout(request: Request) {
+export async function logout(request: Request, destination = "/login") {
   const token = await getToken(request);
   if (token) await pool.query("DELETE FROM user_sessions WHERE token_hash = $1", [hashToken(token)]);
   const session = await sessionStorage.getSession(request.headers.get("Cookie"));
-  return redirect("/login", {
+  return redirect(destination, {
     headers: { "Set-Cookie": await sessionStorage.destroySession(session) },
   });
 }

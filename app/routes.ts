@@ -9,6 +9,16 @@ export default [
   // `?index` query param to disambiguate form submissions — giving login its
   // own real path avoids that entirely.
   index("routes/home.tsx"),
+  route("workouts", "routes/training.tsx", [
+    index("routes/training-library.tsx"),
+    route("exercises", "routes/training-exercises.tsx"),
+    route("exercises/new", "routes/training-new-exercise.tsx"),
+    route("new", "routes/training-new-workout.tsx"),
+    route("sign-in", "routes/training-login.tsx"),
+    route("log", "routes/training-history.tsx"),
+    route(":workoutId", "routes/training-detail.tsx"),
+    route(":workoutId/log", "routes/training-record.tsx"),
+  ]),
   route("copenhagen", "routes/copenhagen.tsx"),
   route("api/copenhagen/recommend", "routes/copenhagen-recommend.ts"),
   route("login", "routes/login.tsx"),
