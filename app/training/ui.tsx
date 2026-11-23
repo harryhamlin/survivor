@@ -10,29 +10,40 @@ export function BackLink({ to = trainingPath, children = "Workout library" }: { 
   return <Link className="tr-back" to={to}>{children}</Link>;
 }
 
+function CheckboxGroup({ label, name, options, hint, selected, onToggle }: {
+  label: string;
+  name: string;
+  options: readonly string[];
+  hint: string;
+  selected?: readonly string[];
+  onToggle?: (option: string, checked: boolean) => void;
+}) {
+  return <fieldset className="tr-fieldset">
+    <legend>{label}</legend>
+    <p className="tr-muted">{hint}</p>
+    <div className="tr-choices">{options.map(option => (
+      <label key={option}>
+        <input type="checkbox" name={name} value={option} checked={selected?.includes(option)}
+          onChange={onToggle && (event => onToggle(option, event.target.checked))}/>
+        {option}
+      </label>
+    ))}</div>
+  </fieldset>;
+}
+
 export function FocusFields() {
   return <>
-    <div className="tr-pair">
-      <label>Movement focus<select name="focus" required defaultValue="">
-        <option disabled value="">Choose focus</option>
-        {movementFocuses.map(option => <option key={option}>{option}</option>)}
-      </select></label>
-      <label>Training goal<select name="goal" required defaultValue="">
-        <option disabled value="">Choose goal</option>
-        {trainingGoals.map(option => <option key={option}>{option}</option>)}
-      </select></label>
-    </div>
-    <fieldset className="tr-fieldset"><legend>Muscle groups</legend>
-      <p className="tr-muted">Choose one or more.</p>
-      <div className="tr-muscles">{muscleGroups.map(group =>
-        <label key={group}><input type="checkbox" name="muscle_groups" value={group}/> {group}</label>
-      )}</div>
-    </fieldset>
+    <label>Movement focus<select name="focus" required defaultValue="">
+      <option disabled value="">Choose focus</option>
+      {movementFocuses.map(option => <option key={option}>{option}</option>)}
+    </select></label>
+    <CheckboxGroup label="Training goals" name="goals" options={trainingGoals} hint="Choose one or more."/>
+    <CheckboxGroup label="Muscle groups" name="muscle_groups" options={muscleGroups} hint="Choose one or more."/>
   </>;
 }
 
-export function FocusSummary({ focus, goal, muscle_groups }: TrainingFocus) {
-  return <span className="tr-muted">{focus} · {muscle_groups.join(", ")} · {goal}</span>;
+export function FocusSummary({ focus, goals, muscle_groups }: TrainingFocus) {
+  return <span className="tr-muted">{focus} · {muscle_groups.join(", ")} · {goals.join(", ")}</span>;
 }
 
 export function ExerciseAuthor({ name }: { name: string }) {
@@ -48,14 +59,14 @@ export function SaveButton({ children }: { children: ReactNode }) {
   return <button className="tr-button" disabled={busy} type="submit">{busy ? "Saving…" : children}</button>;
 }
 
-export const emptyFilters = { query: "", focus: "", muscle: "", goal: "" };
-type Filters = typeof emptyFilters;
+type Filters = { query: string; focus: string; muscle: string; goals: string[] };
+export const emptyFilters: Filters = { query: "", focus: "", muscle: "", goals: [] };
 
 export function matchesFilters(item: TrainingFocus & { name: string }, filters: Filters, ...extra: string[]) {
-  const text = [item.name, item.focus, ...item.muscle_groups, item.goal, ...extra].join(" ").toLowerCase();
+  const text = [item.name, item.focus, ...item.muscle_groups, ...item.goals, ...extra].join(" ").toLowerCase();
   return (!filters.focus || item.focus === filters.focus) &&
     (!filters.muscle || item.muscle_groups.some(group => group === filters.muscle)) &&
-    (!filters.goal || item.goal === filters.goal) && text.includes(filters.query.trim().toLowerCase());
+    (!filters.goals.length || item.goals.some(goal => filters.goals.includes(goal))) && text.includes(filters.query.trim().toLowerCase());
 }
 
 export function LibraryTools({ filters, onChange, noun }: {
@@ -64,17 +75,21 @@ export function LibraryTools({ filters, onChange, noun }: {
   return <div className="tr-tools">
     <input aria-label={"Search " + noun} type="search" placeholder={"Search " + noun} value={filters.query}
       onChange={e => onChange({ ...filters, query: e.target.value })}/>
-    <div className="grid gap-2 sm:grid-cols-3">
+    <div className="grid gap-2 sm:grid-cols-2">
       {([
         ["focus", "Movement focus", movementFocuses],
         ["muscle", "Muscle group", muscleGroups],
-        ["goal", "Training goal", trainingGoals],
       ] as const).map(([key, label, options]) =>
         <label key={key}>{label}<select value={filters[key]} onChange={e => onChange({ ...filters, [key]: e.target.value })}>
           <option value="">All</option>{options.map(option => <option key={option}>{option}</option>)}
         </select></label>
       )}
     </div>
+    <CheckboxGroup label="Training goals" name="filter_goals" options={trainingGoals} hint="Match any selected goal."
+      selected={filters.goals}
+      onToggle={(goal, checked) => onChange({
+        ...filters, goals: checked ? [...filters.goals, goal] : filters.goals.filter(value => value !== goal),
+      })}/>
   </div>;
 }
 

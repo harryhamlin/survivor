@@ -232,14 +232,15 @@ log. Accounts are shared through the existing Postgres connection. Sign in on
 each hostname using the same credentials.
 
 Run `npm run db:migrate` before starting the app. The Heroku release phase runs
-the same migration. For the planned reset, the four tables being replaced are
-`training_workout_exercises`, `training_sessions`, `training_workouts`, and
+the same migration. For the planned reset, the five training tables are
+`training_weekly_plan`, `training_workout_exercises`, `training_sessions`, `training_workouts`, and
 `training_exercises`. After the manual reset, `db/workouts.sql` creates empty
 libraries. Re-running the migration preserves entries you have since added.
 
 Add an exercise first, then use it in a workout. Both forms take one movement
-focus (push, pull, legs, core), one or more muscle groups, and one training goal
-(power, strength, endurance). Each exercise stores its signed-in creator and
+focus (push, pull, legs, core), one or more muscle groups, and one or more
+training goals (power, strength, endurance). The library goal filter matches
+any selected goal. Each exercise stores its signed-in creator and
 their display name at creation. Accounts without a display name are credited
 as “Member” followed by their account ID.
 

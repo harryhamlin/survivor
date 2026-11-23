@@ -49,20 +49,26 @@ test("training routes share accounts, isolate private libraries and save perform
     const a = await login("a@example.test"), b = await login("b@example.test");
     assert.match(await (await get("/workouts/new", a)).text(), /Add your first exercise/);
     const lift = {
-      name: "Test lift", focus: "Push", muscle_groups: "Chest", goal: "Power", equipment: "Cable", unit: "reps",
+      name: "Test lift", focus: "Push", muscle_groups: "Chest", goals: "Power", unit: "reps",
       author_id: String(otherUser.id), author_name: "Forged name",
     };
-    for (const invalid of [{ focus: "Upper body" }, { goal: "" }, { muscle_groups: "" }, { muscle_groups: "Unknown" }]) {
+    for (const invalid of [{ focus: "Upper body" }, { goals: "" }, { goals: "Unknown" }, { muscle_groups: "" }, { muscle_groups: "Unknown" }]) {
       assert.equal((await post("/workouts/exercises/new", { ...lift, ...invalid }, a)).status, 400);
     }
     const form = new URLSearchParams(lift);
     form.append("muscle_groups", "Triceps");
+    form.append("goals", "Endurance");
+    form.append("goals", "Power");
+    const badGoals = new URLSearchParams(form);
+    badGoals.append("goals", "Unknown");
+    assert.equal((await post("/workouts/exercises/new", badGoals, a)).status, 400);
     assert.equal((await post("/workouts/exercises/new?next=workout", form, a)).headers.get("Location"), "/workouts/new");
     const { rows: [exercise] } = await pool.query("SELECT * FROM training_exercises WHERE name = 'Test lift'");
     assert.equal(exercise.author_id, creator.id);
     assert.equal(exercise.author_name, "Alex");
     assert.equal(exercise.focus, "Push");
-    assert.equal(exercise.goal, "Power");
+    assert.deepEqual(exercise.goals, ["Power", "Endurance"]);
+    for (const removed of ["goal", "equipment", "cue"]) assert.ok(!(removed in exercise));
     assert.deepEqual(exercise.muscle_groups, ["Chest", "Triceps"]);
     await pool.query("UPDATE users SET name = 'New name' WHERE id = $1", [creator.id]);
     const library = await (await get("/workouts/exercises", a)).text();
@@ -70,14 +76,19 @@ test("training routes share accounts, isolate private libraries and save perform
     assert.doesNotMatch(library, /Forged name/);
     assert.doesNotMatch(await (await get("/workouts/exercises", b)).text(), /Test lift/);
     assert.doesNotMatch(await (await get("/workouts/exercises")).text(), /Test lift/);
-    const plan = { name: "Personal plan", focus: "Push", goal: "Strength", muscle_groups: "Chest",
+    const plan = { name: "Personal plan", focus: "Push", goals: "Strength", muscle_groups: "Chest",
       minutes: "20", exercise: exercise.id, sets: "2", target: "10" };
     assert.equal((await post("/workouts/new", { ...plan, muscle_groups: "" }, a)).status, 400);
     assert.equal((await post("/workouts/new", plan, b)).status, 400);
-    const path = (await post("/workouts/new", plan, a)).headers.get("Location");
+    const workoutForm = new URLSearchParams(plan);
+    workoutForm.delete("goals");
+    assert.equal((await post("/workouts/new", workoutForm, a)).status, 400);
+    workoutForm.append("goals", "Endurance");
+    workoutForm.append("goals", "Strength");
+    const path = (await post("/workouts/new", workoutForm, a)).headers.get("Location");
     assert.ok(path?.startsWith("/workouts/"));
     const detail = await (await get(path, a)).text();
-    for (const label of ["Push", "Strength", "Chest, Triceps", "Power", "Alex"]) assert.ok(detail.includes(label));
+    for (const label of ["Push", "Strength, Endurance", "Chest, Triceps", "Power, Endurance", "Alex"]) assert.ok(detail.includes(label));
     await pool.query(migration);
     assert.equal((await pool.query("SELECT id FROM training_exercises")).rowCount, 1);
     assert.equal((await pool.query("SELECT id FROM training_workouts")).rowCount, 1);

@@ -10,11 +10,9 @@ export const muscleGroups = [
 ] as const;
 export const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 
-export const equipmentOptions = ["Bodyweight", "Dumbbell", "Barbell", "Resistance band", "Kettlebell", "Cable", "Machine", "Jump rope", "Other"];
-
 export interface TrainingFocus {
   focus: (typeof movementFocuses)[number];
-  goal: (typeof trainingGoals)[number];
+  goals: (typeof trainingGoals)[number][];
   muscle_groups: (typeof muscleGroups)[number][];
 }
 
@@ -22,9 +20,7 @@ export interface Exercise extends TrainingFocus {
   author_name: string;
   id: string;
   name: string;
-  equipment: string;
   unit: "reps" | "seconds";
-  cue: string;
 }
 export interface Workout extends TrainingFocus {
   id: string;

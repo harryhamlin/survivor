@@ -5,7 +5,9 @@ CREATE TABLE IF NOT EXISTS training_exercises (
   author_name text NOT NULL CHECK (btrim(author_name) <> ''),
   name text NOT NULL,
   focus text NOT NULL CHECK (focus IN ('Push', 'Pull', 'Legs', 'Core')),
-  goal text NOT NULL CHECK (goal IN ('Power', 'Strength', 'Endurance')),
+  goals text[] NOT NULL CHECK (
+    cardinality(goals) BETWEEN 1 AND 3 AND goals <@ ARRAY['Power', 'Strength', 'Endurance']
+  ),
   muscle_groups text[] NOT NULL CHECK (
     cardinality(muscle_groups) > 0 AND muscle_groups <@ ARRAY[
       'Chest', 'Shoulders', 'Triceps', 'Biceps', 'Forearms', 'Lats', 'Upper back',
@@ -13,9 +15,7 @@ CREATE TABLE IF NOT EXISTS training_exercises (
       'Hip flexors', 'Adductors', 'Abductors'
     ]
   ),
-  equipment text NOT NULL,
-  unit text NOT NULL CHECK (unit IN ('reps', 'seconds')),
-  cue text NOT NULL DEFAULT ''
+  unit text NOT NULL CHECK (unit IN ('reps', 'seconds'))
 );
 
 CREATE TABLE IF NOT EXISTS training_workouts (
@@ -23,7 +23,9 @@ CREATE TABLE IF NOT EXISTS training_workouts (
   owner_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name text NOT NULL,
   focus text NOT NULL CHECK (focus IN ('Push', 'Pull', 'Legs', 'Core')),
-  goal text NOT NULL CHECK (goal IN ('Power', 'Strength', 'Endurance')),
+  goals text[] NOT NULL CHECK (
+    cardinality(goals) BETWEEN 1 AND 3 AND goals <@ ARRAY['Power', 'Strength', 'Endurance']
+  ),
   muscle_groups text[] NOT NULL CHECK (
     cardinality(muscle_groups) > 0 AND muscle_groups <@ ARRAY[
       'Chest', 'Shoulders', 'Triceps', 'Biceps', 'Forearms', 'Lats', 'Upper back',

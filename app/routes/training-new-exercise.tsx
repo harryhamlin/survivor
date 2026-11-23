@@ -1,7 +1,7 @@
 import { data, Form, redirect } from "react-router";
 import type { Route } from "./+types/training-new-exercise";
 import { createExercise, requireTrainingUser } from "../training/data.server";
-import { equipmentOptions, trainingPath } from "../training/model";
+import { trainingPath } from "../training/model";
 import { BackLink, FocusFields, FormMessage, PageTitle, SaveButton } from "../training/ui";
 import { readFormData } from "../security.server";
 
@@ -25,9 +25,7 @@ export default function NewExercise({ actionData }: Route.ComponentProps) {
     <Form method="post" className="tr-form">
       <label>Exercise name<input name="name" maxLength={80} required/></label>
       <FocusFields/>
-      <label>Equipment<select name="equipment">{equipmentOptions.map(e => <option key={e}>{e}</option>)}</select></label>
       <label>Track by<select name="unit"><option value="reps">Repetitions</option><option value="seconds">Time in seconds</option></select></label>
-      <label>Movement cues (optional)<textarea name="cue" maxLength={500} rows={3}/></label>
       <FormMessage error={actionData?.error}/><SaveButton>Save exercise</SaveButton>
     </Form></div>;
 }

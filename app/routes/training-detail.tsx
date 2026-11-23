@@ -13,7 +13,7 @@ export default function Detail({ loaderData: { workout, movements } }: Route.Com
   return <><BackLink/><PageTitle title={workout.name}><Link className="tr-button" to={trainingPath + "/" + workout.id + "/log"}>Log session</Link></PageTitle>
     <p><FocusSummary {...workout}/></p>{workout.description && <p className="tr-intro">{workout.description}</p>}<WorkoutMeta minutes={workout.minutes} count={movements.length}/>
     <section className="tr-section"><h2>Exercise plan</h2><ol className="tr-list">{movements.map(m =>
-      <li key={m.position} className="tr-plan"><div><p className="tr-muted">{m.equipment}</p><h3>{m.name}</h3><p><ExerciseAuthor name={m.author_name}/></p><p><FocusSummary {...m}/></p><p className="tr-muted">{m.cue}</p></div>
+      <li key={m.position} className="tr-plan"><div><h3>{m.name}</h3><p><ExerciseAuthor name={m.author_name}/></p><p><FocusSummary {...m}/></p></div>
       <strong>{m.sets} × {m.target} {m.unit}</strong></li>)}</ol></section>
   </>;
 }

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { redirect } from "react-router";
 import pool from "../db.server";
 import { getUserId } from "../session.server";
-import { equipmentOptions, maxLoggedSets, movementFocuses, muscleGroups, trainingGoals, trainingPath } from "./model";
+import { maxLoggedSets, movementFocuses, muscleGroups, trainingGoals, trainingPath } from "./model";
 import type { Exercise, Movement, RecordedMovement, TrainingFocus, Workout } from "./model";
 
 export async function requireTrainingUser(request: Request) {
@@ -16,14 +16,14 @@ export async function requireTrainingUser(request: Request) {
 
 export async function listExercises(userId: number | null) {
   const { rows } = await pool.query<Exercise>(
-    `SELECT id, name, focus, muscle_groups, goal, equipment, unit, cue, author_name
+    `SELECT id, name, focus, muscle_groups, goals, unit, author_name
      FROM training_exercises WHERE author_id = $1 ORDER BY name, id`, [userId]);
   return rows;
 }
 
 export async function listWorkouts(userId: number | null) {
   const { rows } = await pool.query<Workout & { count: number }>(
-    `SELECT w.id, w.name, w.focus, w.muscle_groups, w.goal, w.description, w.minutes,
+    `SELECT w.id, w.name, w.focus, w.muscle_groups, w.goals, w.description, w.minutes,
        COUNT(m.position)::int AS count
      FROM training_workouts w JOIN training_workout_exercises m ON m.workout_id = w.id
      WHERE w.owner_id = $1 GROUP BY w.id ORDER BY w.name, w.id`, [userId]);
@@ -32,11 +32,11 @@ export async function listWorkouts(userId: number | null) {
 
 export async function getWorkout(id: string, userId: number | null) {
   const { rows: [workout] } = await pool.query<Workout>(
-    `SELECT id, name, focus, muscle_groups, goal, description, minutes
+    `SELECT id, name, focus, muscle_groups, goals, description, minutes
      FROM training_workouts WHERE id = $1 AND owner_id = $2`, [id, userId]);
   if (!workout) throw new Response("Workout not found", { status: 404, statusText: "Workout not found" });
   const { rows: movements } = await pool.query<Movement>(
-    `SELECT e.id, e.name, e.focus, e.muscle_groups, e.goal, e.equipment, e.unit, e.cue, e.author_name,
+    `SELECT e.id, e.name, e.focus, e.muscle_groups, e.goals, e.unit, e.author_name,
        m.position, m.sets, m.target
      FROM training_workout_exercises m JOIN training_exercises e ON e.id = m.exercise_id
      WHERE m.workout_id = $1 AND e.author_id = $2 ORDER BY m.position`, [id, userId]);
@@ -45,30 +45,36 @@ export async function getWorkout(id: string, userId: number | null) {
 
 const value = (form: FormData, key: string) => String(form.get(key) ?? "").trim();
 const integer = (n: number, max: number) => Number.isInteger(n) && n >= 1 && n <= max;
-function readFocus(form: FormData): TrainingFocus | null {
-  const focus = movementFocuses.find(option => option === value(form, "focus"));
-  const goal = trainingGoals.find(option => option === value(form, "goal"));
-  const selected = new Set(form.getAll("muscle_groups"));
-  const groups = muscleGroups.filter(group => selected.has(group));
-  if (!focus || !goal || !groups.length || groups.length !== selected.size) return null;
-  return { focus, goal, muscle_groups: groups };
+
+function selectedOptions<T extends string>(form: FormData, key: string, options: readonly T[]): T[] | null {
+  const submitted = new Set(form.getAll(key));
+  const selected = options.filter(option => submitted.has(option));
+  return selected.length > 0 && selected.length === submitted.size ? selected : null;
 }
 
-const focusError = "Choose a movement focus, a training goal and at least one muscle group.";
+function readFocus(form: FormData): TrainingFocus | null {
+  const focus = movementFocuses.find(option => option === value(form, "focus"));
+  const goals = selectedOptions(form, "goals", trainingGoals);
+  const groups = selectedOptions(form, "muscle_groups", muscleGroups);
+  if (!focus || !goals || !groups) return null;
+  return { focus, goals, muscle_groups: groups };
+}
+
+const focusError = "Choose a movement focus, at least one training goal and at least one muscle group.";
 
 export async function createExercise(userId: number, form: FormData) {
   const tags = readFocus(form);
   if (!tags) return focusError;
   const name = value(form, "name"), unit = value(form, "unit");
-  const equipment = value(form, "equipment"), cue = value(form, "cue");
-  if (!name || name.length > 80 || !equipmentOptions.includes(equipment) ||
-      !["reps", "seconds"].includes(unit) || cue.length > 500) return "Check the exercise name, equipment, tracking unit and cues.";
+  if (!name || name.length > 80 || !["reps", "seconds"].includes(unit)) {
+    return "Check the exercise name and tracking unit.";
+  }
 
   // Pin the creator from the session and snapshot their display name in the same write.
-  await pool.query(`INSERT INTO training_exercises (id, author_id, author_name, name, focus, muscle_groups, goal, equipment, unit, cue)
-    SELECT $1, u.id, COALESCE(NULLIF(btrim(u.name), ''), 'Member ' || u.id), $3, $4, $5, $6, $7, $8, $9
+  await pool.query(`INSERT INTO training_exercises (id, author_id, author_name, name, focus, muscle_groups, goals, unit)
+    SELECT $1, u.id, COALESCE(NULLIF(btrim(u.name), ''), 'Member ' || u.id), $3, $4, $5, $6, $7
     FROM users u WHERE u.id = $2`,
-    [randomUUID(), userId, name, tags.focus, tags.muscle_groups, tags.goal, equipment, unit, cue]);
+    [randomUUID(), userId, name, tags.focus, tags.muscle_groups, tags.goals, unit]);
 }
 
 export async function createWorkout(userId: number, form: FormData) {
@@ -97,8 +103,8 @@ export async function createWorkout(userId: number, form: FormData) {
       await client.query("ROLLBACK");
       return { error: "Choose exercises from your library." };
     }
-    await client.query(`INSERT INTO training_workouts (id, owner_id, name, focus, muscle_groups, goal, minutes, description)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [id, userId, name, tags.focus, tags.muscle_groups, tags.goal, minutes, description]);
+    await client.query(`INSERT INTO training_workouts (id, owner_id, name, focus, muscle_groups, goals, minutes, description)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [id, userId, name, tags.focus, tags.muscle_groups, tags.goals, minutes, description]);
     await client.query(`INSERT INTO training_workout_exercises (workout_id, position, exercise_id, sets, target)
       SELECT $1, position, exercise, sets, target FROM unnest($2::text[], $3::int[], $4::int[])
       WITH ORDINALITY AS entry(exercise, sets, target, position)`, [id, ids, sets, targets]);
