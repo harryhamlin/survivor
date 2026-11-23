@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS training_workouts (
   id text PRIMARY KEY,
   owner_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name text NOT NULL,
-  focus text NOT NULL CHECK (focus IN ('Push', 'Pull', 'Legs', 'Core')),
+  focus text NOT NULL CHECK (focus IN ('Push', 'Pull', 'Legs', 'Core','Butt')),
   goals text[] NOT NULL CHECK (
     cardinality(goals) BETWEEN 1 AND 3 AND goals <@ ARRAY['Power', 'Strength', 'Endurance']
   ),
