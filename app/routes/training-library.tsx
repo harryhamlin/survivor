@@ -15,24 +15,27 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function Library({ loaderData: { workouts, signedIn } }: Route.ComponentProps) {
   const [query, setQuery] = useState("");
   const [personal, setPersonal] = useState(false);
-  const featured = workouts.find(workout => workout.id === "full-body-foundation");
   const visible = workouts.filter(w => (!personal || w.personal) &&
     (w.name + " " + w.focus).toLowerCase().includes(query.trim().toLowerCase()));
   return <>
-    <PageTitle title="Workout library"><Link className="tr-button" to={trainingPath + "/new"}><span aria-hidden="true">+</span> Create workout</Link></PageTitle>
-    {featured && <section className="tr-hero" aria-labelledby="featured-name">
-      <div className="tr-hero-copy"><p className="tr-kicker"><span className="tr-line"/>Featured workout</p>
-        <h2 id="featured-name">{featured.name}</h2>
-        <WorkoutMeta minutes={featured.minutes} count={featured.count}/>
-        <Link className="tr-hero-link" to={trainingPath + "/" + featured.id}>View workout</Link>
-      </div>
-    </section>}
+    <PageTitle title="Workout library">
+      <Link className="tr-button" to={trainingPath + "/new"}>Create workout</Link>
+    </PageTitle>
     <LibraryTools {...{ personal, setPersonal, query, setQuery, signedIn }} noun="workouts"/>
-    {visible.length ? <div className="tr-grid">{visible.map(w =>
-      <Link to={trainingPath + "/" + w.id} key={w.id} className="tr-card">
-        <p className="tr-kicker">{w.focus}{w.personal && " · Personal"}</p>
-        <h2>{w.name}</h2><WorkoutMeta minutes={w.minutes} count={w.count} />
-      </Link>
-    )}</div> : <p className="tr-empty">{query ? "No workouts match your search." : "Your saved workouts will appear here."}</p>}
+    {visible.length ? (
+      <ul className="tr-list">
+        {visible.map(w => (
+          <li key={w.id}>
+            <Link to={trainingPath + "/" + w.id} className="flex flex-col items-start gap-x-4 gap-y-1 px-4 py-3 hover:bg-primary/10 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <span className="break-words font-medium">{w.name}</span>
+                <p className="tr-muted">{w.focus}{w.personal && " · personal"}</p>
+              </div>
+              <WorkoutMeta minutes={w.minutes} count={w.count} />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    ) : <p className="tr-empty">{query ? "No workouts match your search." : "Your saved workouts will appear here."}</p>}
   </>;
 }

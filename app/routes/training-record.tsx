@@ -25,7 +25,7 @@ export default function Record({ loaderData: { workout, movements, submission, t
     const now = new Date();
     setDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10));
   }, []);
-  return <div className="tr-editor"><BackLink to={trainingPath + "/" + workout.id}>{workout.name}</BackLink>
+  return <div className="mx-auto max-w-lg"><BackLink to={trainingPath + "/" + workout.id}>{workout.name}</BackLink>
     <PageTitle title="Log session"/><p className="tr-intro">{workout.name} · Leave unperformed sets blank.</p>
     <Form method="post" className="tr-form"><input name="submission" type="hidden" value={submission}/>
       <label>Training date<input type="date" name="date" required value={date} onChange={e => setDate(e.target.value)}/></label>

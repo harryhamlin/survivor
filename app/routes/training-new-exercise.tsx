@@ -17,8 +17,8 @@ export async function action({ request }: Route.ActionArgs) {
   return redirect(trainingPath + "/exercises");
 }
 export default function NewExercise({ actionData }: Route.ComponentProps) {
-  return <div className="tr-narrow"><BackLink to={trainingPath + "/exercises"}>Exercise library</BackLink>
-    <PageTitle title="Add exercise"/><p className="tr-intro">Save a movement to your personal library.</p>
+  return <div className="mx-auto max-w-sm"><BackLink to={trainingPath + "/exercises"}>Exercise library</BackLink>
+    <PageTitle title="Add exercise"/>
     <Form method="post" className="tr-form">
       <label>Exercise name<input name="name" maxLength={80} required/></label>
       <div className="tr-pair"><FocusField/><label>Equipment<select name="equipment">{equipmentOptions.map(e => <option key={e}>{e}</option>)}</select></label></div>

@@ -1,9 +1,17 @@
 // Presentational component for the "/login" page — pure markup, no data
 // fetching. All the actual login logic lives in the login route's `action`;
 // this just renders the form and an optional error message.
-import { Form, Link } from "react-router";
+import { Form, Link, useNavigation } from "react-router";
 
-export function LoginForm({ error }: { error?: string }) {
+export function LoginForm({
+  error, title = "Fantasy Survivor 51", home = "/", action,
+}: {
+  error?: string;
+  title?: string;
+  home?: string;
+  action?: string;
+}) {
+  const submitting = useNavigation().state === "submitting";
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-16">
@@ -14,14 +22,10 @@ export function LoginForm({ error }: { error?: string }) {
           className="font-heading whitespace-nowrap text-center tracking-wide text-primary"
           style={{ fontSize: "clamp(1.5rem, 7vw, 2.25rem)" }}
         >
-          <Link to="/">
-            Fantasy Survivor 51
-          </Link>
+          <Link to={home}>{title}</Link>
         </h1>
         <div className="space-y-4">
-          {/* No `action` prop needed: <Form> defaults to POSTing to this
-              same route, which is exactly what we want. */}
-          <Form method="post" className="space-y-4">
+          <Form method="post" action={action} className="space-y-4">
             <div className="space-y-1">
               <label
                 htmlFor="email"
@@ -56,12 +60,13 @@ export function LoginForm({ error }: { error?: string }) {
             </div>
             {/* Set by the route's action when the submitted credentials
                 don't match a user in the database. */}
-            {error && <p className="text-sm text-red-500">{error}</p>}
+            {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
             <button
               type="submit"
+              disabled={submitting}
               className="w-full bg-primary px-3 py-2 font-medium text-black hover:opacity-90"
             >
-              Log in
+              {submitting ? "Logging in…" : "Log in"}
             </button>
           </Form>
           <p className="text-center text-sm text-primary/70">

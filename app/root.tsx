@@ -15,12 +15,6 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { Footer } from "./components/Footer";
 
-// <link> tags injected into <head> on every page. Currently just the
-// favicon; React Router merges this with any route-specific `links` export.
-export const links: Route.LinksFunction = () => [
-  { rel: "icon", type: "image/png", href: "/favicon.png" },
-];
-
 // The actual HTML document shell. `children` is wherever the router decides
 // to render the matched route tree (via the default export below).
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -30,12 +24,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href={training ? "data:," : "/favicon.png"} />
         <Meta />
         <Links />
       </head>
       <body>
         {children}
-        {!training && <Footer />}
+        <Footer />
         <ScrollRestoration />
         <Scripts />
       </body>

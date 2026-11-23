@@ -29,16 +29,16 @@ export function LibraryTools({ personal, setPersonal, query, setQuery, signedIn,
   signedIn: boolean; noun: string;
 }) {
   return <div className="tr-tools">
-    <div className="tr-tabs" aria-label={noun + " collection"}>
-      <button type="button" aria-pressed={!personal} onClick={() => setPersonal(false)}>All {noun}</button>
-      {signedIn && <button type="button" aria-pressed={personal} onClick={() => setPersonal(true)}>My {noun}</button>}
-    </div>
-    <label className="tr-search"><span aria-hidden="true" className="tr-search-icon" />
-      <input aria-label={"Search " + noun} type="search" placeholder={"Search " + noun} value={query} onChange={e => setQuery(e.target.value)} />
-    </label>
+    <input aria-label={"Search " + noun} type="search" placeholder={"Search " + noun} value={query} onChange={e => setQuery(e.target.value)} />
+    {signedIn && (
+      <div className="tr-tabs" role="group" aria-label={noun + " collection"}>
+        <button type="button" aria-pressed={!personal} onClick={() => setPersonal(false)}>All {noun}</button>
+        <button type="button" aria-pressed={personal} onClick={() => setPersonal(true)}>My {noun}</button>
+      </div>
+    )}
   </div>;
 }
 
 export function WorkoutMeta({ minutes, count }: { minutes: number; count: number }) {
-  return <span className="tr-meta"><span className="tr-clock" aria-hidden="true" />{minutes} min <span aria-hidden="true">·</span> {count} {count === 1 ? "exercise" : "exercises"}</span>;
+  return <span className="tr-muted tabular-nums">{minutes} min · {count} {count === 1 ? "exercise" : "exercises"}</span>;
 }

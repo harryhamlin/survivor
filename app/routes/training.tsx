@@ -1,32 +1,48 @@
-import { Form, Link, NavLink, Outlet, useLocation } from "react-router";
+import { Outlet, useLocation, useMatch } from "react-router";
 import type { Route } from "./+types/training";
+import { MenuBanner } from "../components/TopBanner";
+import pool from "../db.server";
 import { getUserId, logout } from "../session.server";
 import { trainingPath } from "../training/model";
 import "../training/training.css";
 
+const loginPath = trainingPath + "/sign-in";
+const libraryLinks = [
+  { to: trainingPath, label: "workout library" },
+  { to: trainingPath + "/exercises", label: "exercise library" },
+  { to: trainingPath + "/log", label: "training log" },
+];
+
 export const headers = () => ({ "Cache-Control": "private, no-store" });
 
 export async function loader({ request }: Route.LoaderArgs) {
-  return { signedIn: (await getUserId(request)) !== null };
+  const userId = await getUserId(request);
+  if (userId === null) return { displayName: null };
+  const { rows } = await pool.query<{ display_name: string }>(
+    "SELECT COALESCE(name, email) AS display_name FROM users WHERE id = $1", [userId],
+  );
+  return { displayName: rows[0]?.display_name ?? null };
 }
 
 export function action({ request }: Route.ActionArgs) {
   return logout(request, trainingPath);
 }
 
-export default function Training({ loaderData }: Route.ComponentProps) {
+export default function Training({ loaderData: { displayName } }: Route.ComponentProps) {
   const { pathname } = useLocation();
-  const exercisePath = trainingPath + "/exercises";
-  const logPath = trainingPath + "/log";
-  const workoutActive = !pathname.startsWith(exercisePath) && !pathname.startsWith(logPath) && !pathname.endsWith("/sign-in");
-  return <div className="training-app">
-    <header className="tr-header"><div className="tr-bar">
-      <Link className="tr-brand" to={trainingPath}><span className="tr-brandmark" aria-hidden="true"><i/><i/><i/></span>Torchsnuffers<span className="tr-brand-sub">Training</span></Link>
-      <nav aria-label="Training"><Link to={trainingPath} aria-current={workoutActive ? "page" : undefined}>Workouts</Link><NavLink to={exercisePath}>Exercises</NavLink><NavLink to={logPath}>Training log</NavLink></nav>
-      <div className="tr-account">{loaderData.signedIn
-        ? <Form action={trainingPath} method="post"><button type="submit">Sign out</button></Form>
-        : <Link to={trainingPath + "/sign-in"}>Sign in</Link>}</div>
-    </div></header>
-    <main className="tr-main"><Outlet /></main>
-  </div>;
+  const isLogin = useMatch(loginPath);
+  if (isLogin) return <Outlet />;
+
+  const links = libraryLinks.filter(link => link.to !== pathname);
+  if (displayName === null) links.push({ to: loginPath, label: "log in" });
+  return (
+    <main className="min-h-screen bg-background">
+      <MenuBanner
+        displayName={displayName ?? "Torchsnuffers training"}
+        links={links}
+        logoutAction={displayName === null ? undefined : trainingPath}
+      />
+      <div className="mx-auto max-w-2xl px-4 py-12"><Outlet /></div>
+    </main>
+  );
 }

@@ -19,7 +19,7 @@ export async function action({ request }: Route.ActionArgs) {
 export default function NewWorkout({ loaderData: { exercises }, actionData }: Route.ComponentProps) {
   const [rows, setRows] = useState([{ key: 0, exerciseId: exercises[0].id }]);
   const nextKey = useRef(1);
-  return <div className="tr-editor"><BackLink/><PageTitle title="Create workout"/>
+  return <div className="mx-auto max-w-lg"><BackLink/><PageTitle title="Create workout"/>
     <Form method="post" className="tr-form">
       <label>Workout name<input name="name" maxLength={80} required/></label>
       <div className="tr-pair"><FocusField/><label>Duration (minutes)<input name="minutes" type="number" min={1} max={600} required defaultValue={30}/></label></div>

@@ -29,6 +29,20 @@ export function TopBanner({
   // is left out, so it never just links to the page you're already on.
   page: (typeof NAV_LINKS)[number]["page"];
 }) {
+  return (
+    <MenuBanner
+      displayName={displayName}
+      links={NAV_LINKS.filter(link => link.page !== page)}
+      logoutAction="/logout"
+    />
+  );
+}
+
+export function MenuBanner({ displayName, links, logoutAction }: {
+  displayName: string;
+  links: readonly { to: string; label: string }[];
+  logoutAction?: string;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -60,7 +74,7 @@ export function TopBanner({
               className="absolute right-0 top-full z-50 mt-2 w-48 space-y-1 border border-primary/40 bg-background p-2"
               onClick={(event) => event.stopPropagation()}
             >
-              {NAV_LINKS.filter((link) => link.page !== page).map((link) => (
+              {links.map((link) => (
                 <Link
                   key={link.to}
                   to={link.to}
@@ -71,18 +85,17 @@ export function TopBanner({
                   {link.label}
                 </Link>
               ))}
-              {/* Posting to /logout (a separate route) keeps "log out"
-                  independent of whatever action the current page's own form
-                  submits to. */}
-              <Form method="post" action="/logout">
-                <button
-                  type="submit"
-                  role="menuitem"
-                  className="block w-full px-2 py-1 text-left text-sm text-primary/70 hover:bg-primary/10 hover:text-primary"
-                >
-                  Log_out
-                </button>
-              </Form>
+              {logoutAction && (
+                <Form method="post" action={logoutAction} onSubmit={() => setMenuOpen(false)}>
+                  <button
+                    type="submit"
+                    role="menuitem"
+                    className="block w-full px-2 py-1 text-left text-sm text-primary/70 hover:bg-primary/10 hover:text-primary"
+                  >
+                    Log_out
+                  </button>
+                </Form>
+              )}
             </div>
           </>
         )}
