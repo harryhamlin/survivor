@@ -208,6 +208,7 @@ export async function generateWeeklyPlan(userId: number, form: FormData) {
       enduranceDays: Number(value(form, "endurance_days")),
       source,
       picks: source === "random" ? [] : form.getAll("pick").map(String),
+      restDays: form.getAll("rest_day").map(Number),
       pins: await pinnedExercises(client, userId),
     };
     const library = await listExercises(userId, client);

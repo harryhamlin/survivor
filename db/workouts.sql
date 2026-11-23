@@ -127,6 +127,7 @@ CROSS JOIN (VALUES
   ('lib-cable-rows', 'Cable rows', 'Pull', ARRAY['Strength'], ARRAY['Upper back', 'Lats', 'Biceps'], 'reps'),
   ('lib-single-arm-cable-pulldowns', 'Single-arm cable pulldowns', 'Pull', ARRAY['Strength', 'Endurance'], ARRAY['Lats', 'Biceps'], 'reps'),
   ('lib-biking', 'Biking', 'Cardio', ARRAY['Endurance', 'Cardiovascular'], ARRAY['Quads', 'Hamstrings', 'Glutes', 'Calves'], 'minutes'),
+  ('lib-running', 'Running', 'Cardio', ARRAY['Endurance', 'Cardiovascular'], ARRAY['Quads', 'Hamstrings', 'Glutes', 'Calves'], 'minutes'),
   ('lib-banded-lateral-walks', 'Banded lateral walks', 'PT', ARRAY['Endurance'], ARRAY['Abductors', 'Glutes'], 'reps'),
   ('lib-clamshells', 'Clamshells', 'PT', ARRAY['Endurance'], ARRAY['Abductors', 'Glutes'], 'reps'),
   ('lib-box-step-downs', 'Box step-downs', 'PT', ARRAY['Strength', 'Endurance'], ARRAY['Quads', 'Glutes'], 'reps')

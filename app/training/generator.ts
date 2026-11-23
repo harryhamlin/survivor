@@ -11,6 +11,8 @@ export interface PlanRequest {
   source: ExerciseSource;
   picks: string[];
   pins: PinnedExercise[];
+  // Weekdays the user wants kept free. Any other leftover days are placed as rest automatically.
+  restDays: number[];
 }
 export interface GeneratedDay { day: number; kind: DayKind; exerciseIds: string[] }
 
@@ -62,6 +64,16 @@ export function planError(library: Candidate[], req: PlanRequest): string | null
   if (!inRange(req.strengthDays, 0, 7) || !inRange(req.enduranceDays, 0, 7) || req.strengthDays + req.enduranceDays > 7) {
     return "Choose strength and endurance days that add up to 7 or fewer.";
   }
+  if (new Set(req.restDays).size !== req.restDays.length || req.restDays.some(day => !inRange(day, 1, 7))) {
+    return "Choose rest days from Monday to Sunday.";
+  }
+  if (req.strengthDays + req.enduranceDays + req.restDays.length > 7) {
+    return `With ${req.restDays.length} rest days you have ${7 - req.restDays.length} days left for strength and endurance. Lower the day counts or free up a rest day.`;
+  }
+  const pinnedRest = req.pins.find(e => req.restDays.includes(e.day));
+  if (pinnedRest) {
+    return `${weekdays[pinnedRest.day - 1]} has a pinned exercise. Remove the pin or train that day.`;
+  }
   const ids = new Set(library.map(e => e.id));
   if (new Set(req.picks).size !== req.picks.length || req.picks.some(id => !ids.has(id))) return "Choose exercises from your library.";
   if (req.source === "picks" && !req.picks.length && !req.pins.length) return "Choose at least one exercise to include.";
@@ -105,13 +117,13 @@ export function generateWeek(library: Candidate[], req: PlanRequest, random = Ma
   };
 
   const layouts = strengthLayouts.filter(days => days.length === req.strengthDays &&
-    req.pins.every(e => days.includes(e.day) === !isCardio(e)));
+    !days.some(day => req.restDays.includes(day)) && req.pins.every(e => days.includes(e.day) === !isCardio(e)));
   const bestCost = Math.min(...layouts.map(spacingCost));
   const best = layouts.filter(days => spacingCost(days) === bestCost);
   const strengthDays = best[randomInt(best.length)];
   const cardioDays = new Set(req.pins.filter(isCardio).map(e => e.day));
   const kinds: DayKind[] = weekdays.map((_, i) => strengthDays.includes(i + 1) ? "Strength" : cardioDays.has(i + 1) ? "Endurance" : "Rest");
-  const open = kinds.flatMap((kind, i) => kind === "Rest" ? [i] : []);
+  const open = kinds.flatMap((kind, i) => kind === "Rest" && !req.restDays.includes(i + 1) ? [i] : []);
   for (const i of shuffle(open).slice(0, req.enduranceDays - cardioDays.size)) kinds[i] = "Endurance";
 
   const uses = new Map<string, number>();

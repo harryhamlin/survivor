@@ -43,7 +43,12 @@ function Generator({ exercises, days, busy }: { exercises: Exercise[]; days: { k
   const [strength, setStrength] = useState(() => days.length ? days.filter(d => d.kind === "Strength").length : 3);
   const [endurance, setEndurance] = useState(() => days.length ? days.filter(d => d.kind === "Endurance").length : 2);
   const [source, setSource] = useState<ExerciseSource>("random");
+  const [restDays, setRestDays] = useState<number[]>([]);
   const rest = 7 - strength - endurance;
+  const chosen = weekdays.filter((_, i) => restDays.includes(i + 1));
+  const restError = rest < 0 ? "Strength and endurance days can't add up to more than 7."
+    : chosen.length > rest ? `You picked ${chosen.length} rest days, but only ${rest} ${rest === 1 ? "day is" : "days are"} left after strength and endurance.`
+    : null;
   return <Form method="post" className="tr-form mb-8 border border-primary/40 p-4">
     <h2>Generate a week</h2>
     <p className="tr-muted">Each strength day is one full-body workout: {fullBodySlots.map(s => s.label.toLowerCase()).join(" → ")}. Endurance days get a cardio exercise.</p>
@@ -54,8 +59,16 @@ function Generator({ exercises, days, busy }: { exercises: Exercise[]; days: { k
       <label>Endurance days<select name="endurance_days" value={endurance} onChange={e => setEndurance(Number(e.target.value))}>
         {dayCounts.map(n => <option key={n}>{n}</option>)}</select></label>
     </div>
-    <p className={rest < 0 ? "tr-error" : "tr-muted"} aria-live="polite">
-      {rest < 0 ? "Strength and endurance days can't add up to more than 7." : `Rest days: ${rest}`}
+    <fieldset className="tr-fieldset">
+      <legend>Rest days (optional)</legend>
+      <p className="tr-muted">Pick the weekdays you want off. Any other rest days are placed to space out your training.</p>
+      <div className="tr-choices">{weekdays.map((day, i) => <label key={day}>
+        <input type="checkbox" name="rest_day" value={i + 1} checked={restDays.includes(i + 1)}
+          onChange={e => setRestDays(current => e.target.checked ? [...current, i + 1] : current.filter(d => d !== i + 1))}/>{day}
+      </label>)}</div>
+    </fieldset>
+    <p className={restError ? "tr-error" : "tr-muted"} aria-live="polite">
+      {restError ?? `Rest days: ${rest}` + (chosen.length ? ` · ${chosen.join(", ")}` + (rest > chosen.length ? ` + ${rest - chosen.length} placed for you` : "") : "")}
     </p>
     <fieldset className="tr-fieldset">
       <legend>Exercises for open slots</legend>
@@ -76,8 +89,27 @@ function Generator({ exercises, days, busy }: { exercises: Exercise[]; days: { k
         </div> : null;
       })}
     </fieldset>}
-    <button className="tr-button" type="submit" disabled={busy || rest < 0}>Generate week</button>
+    <button className="tr-button" type="submit" disabled={busy || restError !== null}>Generate week</button>
     <p className="tr-muted">Pinned exercises stay on their weekdays each time you generate.</p>
+  </Form>;
+}
+
+// Trades a whole weekday with another. The picker stays hidden until you ask to swap.
+function DaySwap({ day, busy }: { day: number; busy: boolean }) {
+  const [open, setOpen] = useState(false);
+  const name = weekdays[day - 1];
+  if (!open) return <button type="button" className="tr-text-link" onClick={() => setOpen(true)}
+    aria-label={"Swap " + name + " with another day"}>Swap</button>;
+  return <Form method="post" className="flex items-center gap-2 text-sm" onSubmit={() => setOpen(false)}>
+    <input type="hidden" name="intent" value="swap-days"/>
+    <input type="hidden" name="day" value={day}/>
+    <select name="with" aria-label={"Swap " + name + " with"} required defaultValue="" autoFocus
+      className="border border-primary/40 bg-background px-2 py-1 text-primary">
+      <option value="" disabled>Swap with…</option>
+      {weekdays.map((other, i) => i + 1 !== day && <option key={other} value={i + 1}>{other}</option>)}
+    </select>
+    <button type="submit" className="tr-text-link" disabled={busy}>Swap</button>
+    <button type="button" className="tr-text-link" onClick={() => setOpen(false)}>Cancel</button>
   </Form>;
 }
 
@@ -136,16 +168,7 @@ export default function WeeklyPlan({ loaderData: { exercises, entries, days, loc
       return <section key={day} className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold">{day}{kind && <span className="tr-muted font-normal"> · {pending ? "Generate to update day" : kind}</span>}</h2>
-          <Form method="post" className="flex items-center gap-2 text-sm">
-            <input type="hidden" name="intent" value="swap-days"/>
-            <input type="hidden" name="day" value={dayNumber}/>
-            <select name="with" aria-label={"Swap " + day + " with"} defaultValue=""
-              className="border border-primary/40 bg-background px-2 py-1 text-primary">
-              <option value="" disabled>Swap with…</option>
-              {weekdays.map((other, i) => i !== index && <option key={other} value={i + 1}>{other}</option>)}
-            </select>
-            <button type="submit" className="tr-text-link" disabled={busy}>Swap</button>
-          </Form>
+          <DaySwap day={dayNumber} busy={busy}/>
         </div>
         {planned.length ? <ul className="mt-2 space-y-2">{planned.map(entry => (
           <li key={entry.exercise_id} className="flex justify-between gap-4">

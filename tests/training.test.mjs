@@ -170,6 +170,22 @@ test("training routes share accounts, isolate private libraries and save perform
     await swapDays("1", "7");
     await swapDays("1", "3", b);
     assert.deepEqual([await readWeek(), await readKinds()], [beforeSwap, kindsBeforeSwap]);
+    // Chosen rest days stay free; the rest of the week is still filled.
+    for (const [restDays, extra] of [[["2", "2"]], [["9"]], [["1"]], [["2", "4", "5", "6"], { endurance_days: "2" }]]) {
+      const body = new URLSearchParams({ ...fill, ...extra });
+      for (const day of restDays) body.append("rest_day", day);
+      assert.equal((await post(weeklyPath, body, a)).status, 400);
+    }
+    assert.deepEqual(await readWeek(), beforeSwap);
+    const restful = new URLSearchParams({ ...fill });
+    for (const day of ["2", "4", "5"]) restful.append("rest_day", day);
+    for (let run = 0; run < 5; run++) {
+      assert.equal((await post(weeklyPath, restful, a)).status, 302);
+      const kinds = await readKinds();
+      for (const day of [2, 4, 5]) assert.equal(kinds.find(k => k.day === day).kind, "Rest");
+      assert.deepEqual(kinds.filter(k => k.kind === "Strength").map(k => k.day), [1, 7]);
+      assert.equal(kinds.filter(k => k.kind === "Endurance").length, 1);
+    }
     // Pin an auto-filled slot while a new week is being generated.
     const simultaneous = await Promise.all([add("1", "Squat"), post(weeklyPath, fill, a)]);
     assert.ok(simultaneous.every(r => r.status === 302));

@@ -261,10 +261,12 @@ quads that hits glutes or abductors counts as glutes. Random slots draw from
 exercises tagged Strength (PT moves need no tag), favouring ones not yet used
 that week. Each endurance day gets one Cardio exercise. Exercises can come
 from your library at random, only from exercises you choose, or from your
-choices with the remaining slots filled randomly. `training_weekly_days` stores
+choices with the remaining slots filled randomly. You can also tick the weekdays you
+want as rest days; strength and endurance days avoid them, and any leftover days
+become rest days placed for spacing. `training_weekly_days` stores
 each day's type.
 
-Each weekday's **Swap with…** control trades that day's whole contents (type,
+Each weekday's **Swap** link opens a picker that trades that day's whole contents (type,
 exercises and pins) with another weekday.
 
 Below the schedule, **Lock in this week** copies the plan onto the dated
