@@ -4,7 +4,7 @@ import type { Route } from "./+types/training-weekly-plan";
 import { readFormData } from "../security.server";
 import {
   generateWeeklyPlan, listExercises, listLockedDays, listWeeklyDays, listWeeklyPlan, lockWeek, lockWindow,
-  requireTrainingUser, updateWeeklyPlan,
+  requireTrainingUser, swapWeeklyDays, updateWeeklyPlan,
 } from "../training/data.server";
 import { fullBodySlots, type DayKind, type ExerciseSource } from "../training/generator";
 import { addDays, formatDate, movementFocuses, trainingPath, weekdays, weekStart, type Exercise } from "../training/model";
@@ -26,7 +26,8 @@ export async function action({ request }: Route.ActionArgs) {
   const form = await readFormData(request);
   const intent = form.get("intent");
   const error = intent === "generate" ? await generateWeeklyPlan(user, form)
-    : intent === "lock" ? await lockWeek(user, form) : await updateWeeklyPlan(user, form);
+    : intent === "lock" ? await lockWeek(user, form)
+    : intent === "swap-days" ? await swapWeeklyDays(user, form) : await updateWeeklyPlan(user, form);
   if (error) return data({ error }, { status: 400 });
   return redirect(trainingPath + (intent === "lock" ? "/log" : "/weekly-plan"));
 }
@@ -133,7 +134,19 @@ export default function WeeklyPlan({ loaderData: { exercises, entries, days, loc
       const planned = entries.filter(entry => entry.day_of_week === dayNumber);
       const pending = kind && planned.some(e => e.pinned && kind !== (e.focus === "Cardio" ? "Endurance" : "Strength"));
       return <section key={day} className="p-4">
-        <h2 className="font-semibold">{day}{kind && <span className="tr-muted font-normal"> · {pending ? "Generate to update day" : kind}</span>}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">{day}{kind && <span className="tr-muted font-normal"> · {pending ? "Generate to update day" : kind}</span>}</h2>
+          <Form method="post" className="flex items-center gap-2 text-sm">
+            <input type="hidden" name="intent" value="swap-days"/>
+            <input type="hidden" name="day" value={dayNumber}/>
+            <select name="with" aria-label={"Swap " + day + " with"} defaultValue=""
+              className="border border-primary/40 bg-background px-2 py-1 text-primary">
+              <option value="" disabled>Swap with…</option>
+              {weekdays.map((other, i) => i !== index && <option key={other} value={i + 1}>{other}</option>)}
+            </select>
+            <button type="submit" className="tr-text-link" disabled={busy}>Swap</button>
+          </Form>
+        </div>
         {planned.length ? <ul className="mt-2 space-y-2">{planned.map(entry => (
           <li key={entry.exercise_id} className="flex justify-between gap-4">
             <div className="min-w-0 break-words"><p>{entry.name}{entry.pinned && <span className="tr-muted"> · Pinned</span>}</p><ExerciseAuthor name={entry.author_name}/></div>

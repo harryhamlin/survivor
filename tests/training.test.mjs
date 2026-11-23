@@ -151,6 +151,25 @@ test("training routes share accounts, isolate private libraries and save perform
       assert.deepEqual(week.filter(e => e.day === 3), [{ day: 3, id: "Bike", pinned: true }]);
       assert.equal(week.filter(e => e.pinned).length, 4);
     }
+    // Swap whole days, including two strength days that share every exercise.
+    const swapDays = (day, other, cookie = a) => post(weeklyPath, { intent: "swap-days", day, with: other }, cookie);
+    const readKinds = async () => (await pool.query(
+      "SELECT day_of_week AS day, kind FROM training_weekly_days WHERE user_id = $1 ORDER BY day_of_week", [creator.id])).rows;
+    const [beforeSwap, kindsBeforeSwap] = [await readWeek(), await readKinds()];
+    for (const invalid of [["1", "1"], ["1", "8"], ["0", "3"]]) assert.equal((await swapDays(...invalid)).status, 400);
+    assert.equal((await swapDays("1", "3")).headers.get("Location"), weeklyPath);
+    const swappedWeek = await readWeek();
+    assert.deepEqual(swappedWeek.filter(e => e.day === 3), beforeSwap.filter(e => e.day === 1).map(e => ({ ...e, day: 3 })));
+    assert.deepEqual(swappedWeek.filter(e => e.day === 1), beforeSwap.filter(e => e.day === 3).map(e => ({ ...e, day: 1 })));
+    const swappedKinds = await readKinds();
+    assert.equal(swappedKinds.find(k => k.day === 1).kind, kindsBeforeSwap.find(k => k.day === 3).kind);
+    assert.equal(swappedKinds.find(k => k.day === 3).kind, kindsBeforeSwap.find(k => k.day === 1).kind);
+    await swapDays("3", "1");
+    assert.equal((await swapDays("7", "1")).status, 302);
+    assert.notDeepEqual(await readWeek(), beforeSwap);
+    await swapDays("1", "7");
+    await swapDays("1", "3", b);
+    assert.deepEqual([await readWeek(), await readKinds()], [beforeSwap, kindsBeforeSwap]);
     // Pin an auto-filled slot while a new week is being generated.
     const simultaneous = await Promise.all([add("1", "Squat"), post(weeklyPath, fill, a)]);
     assert.ok(simultaneous.every(r => r.status === 302));

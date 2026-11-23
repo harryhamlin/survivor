@@ -168,6 +168,30 @@ export async function updateWeeklyPlan(userId: number, form: FormData) {
   });
 }
 
+// Trades everything on two weekdays, pins and day types included. Rows are rewritten rather than
+// updated in place because both days can hold the same exercise, which would collide mid-update.
+// (A writable CTE doesn't help: its DELETE and INSERT share one snapshot.)
+export async function swapWeeklyDays(userId: number, form: FormData) {
+  const a = Number(value(form, "day")), b = Number(value(form, "with"));
+  if (!integer(a, 7) || !integer(b, 7) || a === b) return "Choose two different weekdays to swap.";
+  const other = (day: number) => day === a ? b : a;
+  return editWeek(userId, async client => {
+    const days = [userId, a, b];
+    const { rows: entries } = await client.query<{ day_of_week: number; exercise_id: string; position: number; pinned: boolean }>(
+      "SELECT day_of_week, exercise_id, position, pinned FROM training_weekly_plan WHERE user_id = $1 AND day_of_week IN ($2, $3)", days);
+    const { rows: kinds } = await client.query<{ day_of_week: number; kind: DayKind }>(
+      "SELECT day_of_week, kind FROM training_weekly_days WHERE user_id = $1 AND day_of_week IN ($2, $3)", days);
+    await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1 AND day_of_week IN ($2, $3)", days);
+    await client.query("DELETE FROM training_weekly_days WHERE user_id = $1 AND day_of_week IN ($2, $3)", days);
+    await client.query(`INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id, position, pinned)
+      SELECT $1, d, e, p, pin FROM unnest($2::smallint[], $3::text[], $4::smallint[], $5::boolean[]) AS t(d, e, p, pin)`,
+      [userId, entries.map(e => other(e.day_of_week)), entries.map(e => e.exercise_id), entries.map(e => e.position), entries.map(e => e.pinned)]);
+    await client.query(`INSERT INTO training_weekly_days (user_id, day_of_week, kind)
+      SELECT $1, d, k FROM unnest($2::smallint[], $3::text[]) AS t(d, k)`,
+      [userId, kinds.map(k => other(k.day_of_week)), kinds.map(k => k.kind)]);
+  });
+}
+
 export async function listWeeklyDays(userId: number) {
   const { rows } = await pool.query<{ day_of_week: number; kind: DayKind }>(
     "SELECT day_of_week, kind FROM training_weekly_days WHERE user_id = $1 ORDER BY day_of_week", [userId]);

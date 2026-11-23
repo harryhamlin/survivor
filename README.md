@@ -264,6 +264,9 @@ from your library at random, only from exercises you choose, or from your
 choices with the remaining slots filled randomly. `training_weekly_days` stores
 each day's type.
 
+Each weekday's **Swap with…** control trades that day's whole contents (type,
+exercises and pins) with another weekday.
+
 Below the schedule, **Lock in this week** copies the plan onto the dated
 Monday–Sunday containing the browser's today (`training_locked_days` and
 `training_locked_exercises`). Locking in again replaces that week. The training
