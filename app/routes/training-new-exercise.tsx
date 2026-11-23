@@ -15,7 +15,6 @@ export async function action({ request }: Route.ActionArgs) {
   const error = await createExercise(userId, await readFormData(request));
   if (error) return data({ error }, { status: 400 });
   const next = new URL(request.url).searchParams.get("next");
-  if (next === "workout") return redirect(trainingPath + "/new");
   if (next === "weekly-plan") return redirect(trainingPath + "/weekly-plan");
   return redirect(trainingPath + "/exercises");
 }

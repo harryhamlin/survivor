@@ -1,12 +1,12 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigation } from "react-router";
-import { movementFocuses, muscleGroups, trainingGoals, trainingPath, type TrainingFocus } from "./model";
+import { localToday, movementFocuses, muscleGroups, trainingGoals, trainingPath, type TrainingFocus } from "./model";
 
 export function PageTitle({ title, children }: { title: string; children?: ReactNode }) {
   return <div className="tr-title"><h1>{title}</h1>{children}</div>;
 }
 
-export function BackLink({ to = trainingPath, children = "Workout library" }: { to?: string; children?: ReactNode }) {
+export function BackLink({ to = trainingPath + "/log", children = "Training log" }: { to?: string; children?: ReactNode }) {
   return <Link className="tr-back" to={to}>{children}</Link>;
 }
 
@@ -93,6 +93,9 @@ export function LibraryTools({ filters, onChange, noun }: {
   </div>;
 }
 
-export function WorkoutMeta({ minutes, count }: { minutes: number; count: number }) {
-  return <span className="tr-muted tabular-nums">{minutes} min · {count} {count === 1 ? "exercise" : "exercises"}</span>;
+// The server renders with its own date; the browser's calendar day takes over after hydration.
+export function useLocalToday(serverToday: string) {
+  const [today, setToday] = useState(serverToday);
+  useEffect(() => setToday(localToday()), []);
+  return today;
 }

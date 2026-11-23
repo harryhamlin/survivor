@@ -3,9 +3,12 @@ import type { PoolClient } from "pg";
 import { redirect } from "react-router";
 import pool from "../db.server";
 import { getUserId } from "../session.server";
-import { exerciseUnits, maxLoggedSets, movementFocuses, muscleGroups, trainingGoals, trainingPath } from "./model";
+import {
+  addDays, dayOfWeek, exerciseUnits, isoDate, maxLoggedSets, movementFocuses, muscleGroups, trainingGoals, trainingPath,
+  weekdays, weekStart,
+} from "./model";
 import { exerciseSources, generateWeek, pinConflict, planError, type DayKind, type PinnedExercise } from "./generator";
-import type { Exercise, Movement, RecordedMovement, TrainingFocus, Workout } from "./model";
+import type { Exercise, PlannedExercise, RecordedMovement, TrainingFocus } from "./model";
 
 export async function requireTrainingUser(request: Request) {
   const userId = await getUserId(request);
@@ -21,28 +24,6 @@ export async function listExercises(userId: number | null, db: Pick<PoolClient, 
     `SELECT id, name, focus, muscle_groups, goals, unit, author_name
      FROM training_exercises WHERE author_id = $1 ORDER BY name, id`, [userId]);
   return rows;
-}
-
-export async function listWorkouts(userId: number | null) {
-  const { rows } = await pool.query<Workout & { count: number }>(
-    `SELECT w.id, w.name, w.focus, w.muscle_groups, w.goals, w.description, w.minutes,
-       COUNT(m.position)::int AS count
-     FROM training_workouts w JOIN training_workout_exercises m ON m.workout_id = w.id
-     WHERE w.owner_id = $1 GROUP BY w.id ORDER BY w.name, w.id`, [userId]);
-  return rows;
-}
-
-export async function getWorkout(id: string, userId: number | null) {
-  const { rows: [workout] } = await pool.query<Workout>(
-    `SELECT id, name, focus, muscle_groups, goals, description, minutes
-     FROM training_workouts WHERE id = $1 AND owner_id = $2`, [id, userId]);
-  if (!workout) throw new Response("Workout not found", { status: 404, statusText: "Workout not found" });
-  const { rows: movements } = await pool.query<Movement>(
-    `SELECT e.id, e.name, e.focus, e.muscle_groups, e.goals, e.unit, e.author_name,
-       m.position, m.sets, m.target
-     FROM training_workout_exercises m JOIN training_exercises e ON e.id = m.exercise_id
-     WHERE m.workout_id = $1 AND e.author_id = $2 ORDER BY m.position`, [id, userId]);
-  return { workout, movements };
 }
 
 const value = (form: FormData, key: string) => String(form.get(key) ?? "").trim();
@@ -79,55 +60,21 @@ export async function createExercise(userId: number, form: FormData) {
     [randomUUID(), userId, name, tags.focus, tags.muscle_groups, tags.goals, unit]);
 }
 
-export async function createWorkout(userId: number, form: FormData) {
-  const tags = readFocus(form);
-  if (!tags) return { error: focusError };
-  const name = value(form, "name"), minutes = Number(value(form, "minutes"));
-  const description = value(form, "description");
-  const ids = form.getAll("exercise").map(String);
-  const sets = form.getAll("sets").map(Number);
-  const targets = form.getAll("target").map(Number);
-  if (!name || name.length > 80 || !integer(minutes, 600) || description.length > 500) {
-    return { error: "Enter a workout name and duration from 1 to 600 minutes." };
-  }
-  if (!ids.length || ids.length > 12 || sets.length !== ids.length || targets.length !== ids.length ||
-      sets.some(n => !integer(n, 8)) || targets.some(n => !integer(n, 3600))) {
-    return { error: "Choose up to 12 exercises with 1–8 sets and a target for each." };
-  }
-  const client = await pool.connect();
-  const id = randomUUID();
-  try {
-    await client.query("BEGIN");
-    const allowed = await client.query(
-      "SELECT id FROM training_exercises WHERE id = ANY($1) AND author_id = $2 FOR SHARE",
-      [ids, userId]);
-    if (allowed.rowCount !== new Set(ids).size) {
-      await client.query("ROLLBACK");
-      return { error: "Choose exercises from your library." };
-    }
-    await client.query(`INSERT INTO training_workouts (id, owner_id, name, focus, muscle_groups, goals, minutes, description)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [id, userId, name, tags.focus, tags.muscle_groups, tags.goals, minutes, description]);
-    await client.query(`INSERT INTO training_workout_exercises (workout_id, position, exercise_id, sets, target)
-      SELECT $1, position, exercise, sets, target FROM unnest($2::text[], $3::int[], $4::int[])
-      WITH ORDINALITY AS entry(exercise, sets, target, position)`, [id, ids, sets, targets]);
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-  return { id };
+const isDate = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= "0001-01-01" &&
+  Number.isFinite(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
+
+export function readPlannedDate(date: string) {
+  if (!isDate(date)) throw new Response("Workout not found", { status: 404, statusText: "Workout not found" });
+  return date;
 }
 
-export async function recordSession(userId: number, id: string, form: FormData) {
-  const { workout, movements } = await getWorkout(id, userId);
+export async function recordSession(userId: number, plannedOn: string, form: FormData) {
+  const day = await getLockedDay(userId, plannedOn);
   const date = value(form, "date"), notes = value(form, "notes"), token = value(form, "submission");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < "0001-01-01" ||
-      !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) return "Enter a valid training date.";
+  if (!isDate(date)) return "Enter a valid training date.";
   if (notes.length > 1000 || !/^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i.test(token)) return "Check your notes and reload the form if needed.";
   const recorded: RecordedMovement[] = [];
-  for (const move of movements) {
+  for (const move of day.exercises) {
     const sets: RecordedMovement["sets"] = [];
     for (let i = 1; i <= maxLoggedSets; i++) {
       const key = move.position + "-" + i;
@@ -139,12 +86,16 @@ export async function recordSession(userId: number, id: string, form: FormData) 
       }
       sets.push({ quantity, weight });
     }
+    // Sets are keyed by position, so make sure each position still holds the exercise that was on screen.
+    if (sets.length && value(form, "exercise-" + move.position) !== move.id) {
+      return "This workout changed while you were logging. Check your sets and save again.";
+    }
     if (sets.length) recorded.push({ name: move.name, author_name: move.author_name, unit: move.unit, sets });
   }
   if (!recorded.length) return "Enter at least one completed set.";
   await pool.query(`INSERT INTO training_sessions (user_id, submission_id, workout_name, performed_on, notes, movements)
     VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (user_id, submission_id) DO NOTHING`,
-    [userId, token, workout.name, date, notes, JSON.stringify(recorded)]);
+    [userId, token, workoutName(day), date, notes, JSON.stringify(recorded)]);
 }
 
 export async function listSessions(userId: number) {
@@ -154,8 +105,8 @@ export async function listSessions(userId: number) {
   return rows;
 }
 
-export async function listWeeklyPlan(userId: number) {
-  const { rows } = await pool.query<{ day_of_week: number; exercise_id: string; name: string; author_name: string; pinned: boolean; focus: Exercise["focus"] }>(
+export async function listWeeklyPlan(userId: number, db: Pick<PoolClient, "query"> = pool) {
+  const { rows } = await db.query<{ day_of_week: number; exercise_id: string; name: string; author_name: string; pinned: boolean; focus: Exercise["focus"] }>(
     `SELECT p.day_of_week, p.exercise_id, e.name, e.author_name, e.focus, p.pinned
      FROM training_weekly_plan p
      JOIN training_exercises e ON e.author_id = p.user_id AND e.id = p.exercise_id
@@ -249,5 +200,105 @@ export async function generateWeeklyPlan(userId: number, form: FormData) {
       SELECT $1, day, id, position FROM unnest($2::smallint[], $3::text[], $4::smallint[]) AS p(day, id, position)
       ON CONFLICT (user_id, day_of_week, exercise_id) DO UPDATE SET position = EXCLUDED.position`,
       [userId, entries.map(e => e.day), entries.map(e => e.id), entries.map(e => e.position)]);
+  });
+}
+
+export interface LockedDay { date: string; kind: DayKind; exercises: PlannedExercise[] }
+
+export function workoutName(day: LockedDay) {
+  const weekday = weekdays[dayOfWeek(day.date) - 1];
+  return weekday + " " + (day.kind === "Rest" ? "workout" : day.kind.toLowerCase());
+}
+
+// Locked days between two dates, inclusive, each with its exercises in order.
+export async function listLockedDays(userId: number, from: string, to: string): Promise<LockedDay[]> {
+  const [{ rows: days }, { rows: exercises }] = await Promise.all([
+    pool.query<{ date: string; kind: DayKind }>(
+      `SELECT to_char(planned_on, 'YYYY-MM-DD') AS date, kind FROM training_locked_days
+       WHERE user_id = $1 AND planned_on BETWEEN $2 AND $3 ORDER BY planned_on`, [userId, from, to]),
+    pool.query<PlannedExercise & { date: string }>(
+      `SELECT to_char(l.planned_on, 'YYYY-MM-DD') AS date, l.position, e.id, e.name, e.focus, e.goals,
+         e.muscle_groups, e.unit, e.author_name
+       FROM training_locked_exercises l
+       JOIN training_exercises e ON e.author_id = l.user_id AND e.id = l.exercise_id
+       WHERE l.user_id = $1 AND l.planned_on BETWEEN $2 AND $3 ORDER BY l.planned_on, l.position`, [userId, from, to]),
+  ]);
+  return days.map(day => ({ ...day, exercises: exercises.filter(e => e.date === day.date).map(({ date: _, ...e }) => e) }));
+}
+
+export async function getLockedDay(userId: number, date: string) {
+  const [day] = await listLockedDays(userId, readPlannedDate(date), date);
+  if (!day) throw new Response("Workout not found", { status: 404, statusText: "Workout not found" });
+  return day;
+}
+
+// Dates a week around the server's day, wide enough to hold the browser's current week in any time zone.
+export function lockWindow() {
+  const today = isoDate(new Date());
+  return { today, from: addDays(today, -8), to: addDays(today, 8) };
+}
+
+// Copies the repeating plan onto the dated Monday–Sunday that contains the browser's today.
+export async function lockWeek(userId: number, form: FormData) {
+  const today = value(form, "today");
+  const { today: serverToday } = lockWindow();
+  if (!isDate(today) || today < addDays(serverToday, -1) || today > addDays(serverToday, 1)) {
+    return "Reload the page and try again.";
+  }
+  const start = weekStart(today);
+  return editWeek(userId, async client => {
+    const entries = await listWeeklyPlan(userId, client);
+    if (!entries.length) return "Plan at least one exercise before locking in the week.";
+    const { rows: kinds } = await client.query<{ day_of_week: number; kind: DayKind }>(
+      "SELECT day_of_week, kind FROM training_weekly_days WHERE user_id = $1", [userId]);
+    const days = weekdays.map((_, i) => {
+      const planned = entries.filter(e => e.day_of_week === i + 1);
+      const kind: DayKind = !planned.length ? kinds.find(k => k.day_of_week === i + 1)?.kind ?? "Rest"
+        : planned.every(e => e.focus === "Cardio") ? "Endurance" : "Strength";
+      return { date: addDays(start, i), kind, ids: planned.map(e => e.exercise_id) };
+    });
+    const rows = days.flatMap(d => d.ids.map((id, i) => ({ date: d.date, id, position: i + 1 })));
+    await client.query("DELETE FROM training_locked_days WHERE user_id = $1 AND planned_on BETWEEN $2 AND $3",
+      [userId, start, addDays(start, 6)]);
+    await client.query(`INSERT INTO training_locked_days (user_id, planned_on, kind)
+      SELECT $1, d, k FROM unnest($2::date[], $3::text[]) AS t(d, k)`,
+      [userId, days.map(d => d.date), days.map(d => d.kind)]);
+    await client.query(`INSERT INTO training_locked_exercises (user_id, planned_on, position, exercise_id)
+      SELECT $1, d, p, e FROM unnest($2::date[], $3::smallint[], $4::text[]) AS t(d, p, e)`,
+      [userId, rows.map(r => r.date), rows.map(r => r.position), rows.map(r => r.id)]);
+  });
+}
+
+// Live changes to one locked day from the training log. The repeating weekly plan is left alone.
+export async function editLockedDay(userId: number, date: string, form: FormData) {
+  readPlannedDate(date);
+  const intent = value(form, "intent"), exercise = value(form, "exercise");
+  const position = Number(value(form, "position"));
+  if (!["swap", "add", "remove"].includes(intent)) return "Choose a workout change.";
+  if (intent !== "add" && !integer(position, 32767)) return "Choose an exercise on this workout.";
+  return editWeek(userId, async client => {
+    const { rows: current } = await client.query<{ position: number; exercise_id: string }>(
+      `SELECT l.position, l.exercise_id FROM training_locked_days d
+       LEFT JOIN training_locked_exercises l USING (user_id, planned_on)
+       WHERE d.user_id = $1 AND d.planned_on = $2`, [userId, date]);
+    if (!current.length) return "This day isn't part of a locked-in week.";
+    if (intent === "remove") {
+      await client.query("DELETE FROM training_locked_exercises WHERE user_id = $1 AND planned_on = $2 AND position = $3",
+        [userId, date, position]);
+      return;
+    }
+    const owned = await client.query("SELECT 1 FROM training_exercises WHERE author_id = $1 AND id = $2", [userId, exercise]);
+    if (!owned.rowCount) return "Choose an exercise from your library.";
+    if (current.some(e => e.exercise_id === exercise && e.position !== position)) return "That exercise is already in this workout.";
+    if (intent === "add") {
+      await client.query(`INSERT INTO training_locked_exercises (user_id, planned_on, position, exercise_id)
+        SELECT $1, $2, COALESCE(MAX(position), 0) + 1, $3 FROM training_locked_exercises
+        WHERE user_id = $1 AND planned_on = $2`, [userId, date, exercise]);
+      return;
+    }
+    const swapped = await client.query(
+      "UPDATE training_locked_exercises SET exercise_id = $4 WHERE user_id = $1 AND planned_on = $2 AND position = $3",
+      [userId, date, position, exercise]);
+    if (!swapped.rowCount) return "Choose an exercise on this workout.";
   });
 }

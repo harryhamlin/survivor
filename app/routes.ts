@@ -10,15 +10,13 @@ export default [
   // own real path avoids that entirely.
   index("routes/home.tsx"),
   route("workouts", "routes/training.tsx", [
-    index("routes/training-library.tsx"),
+    index("routes/training-index.tsx"),
     route("exercises", "routes/training-exercises.tsx"),
     route("exercises/new", "routes/training-new-exercise.tsx"),
-    route("new", "routes/training-new-workout.tsx"),
     route("sign-in", "routes/training-login.tsx"),
     route("log", "routes/training-history.tsx"),
     route("weekly-plan", "routes/training-weekly-plan.tsx"),
-    route(":workoutId", "routes/training-detail.tsx"),
-    route(":workoutId/log", "routes/training-record.tsx"),
+    route("log/:date", "routes/training-record.tsx"),
   ]),
   route("copenhagen", "routes/copenhagen.tsx"),
   route("api/copenhagen/recommend", "routes/copenhagen-recommend.ts"),

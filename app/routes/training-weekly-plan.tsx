@@ -3,26 +3,32 @@ import { data, Form, Link, redirect, useNavigation } from "react-router";
 import type { Route } from "./+types/training-weekly-plan";
 import { readFormData } from "../security.server";
 import {
-  generateWeeklyPlan, listExercises, listWeeklyDays, listWeeklyPlan, requireTrainingUser, updateWeeklyPlan,
+  generateWeeklyPlan, listExercises, listLockedDays, listWeeklyDays, listWeeklyPlan, lockWeek, lockWindow,
+  requireTrainingUser, updateWeeklyPlan,
 } from "../training/data.server";
 import { fullBodySlots, type DayKind, type ExerciseSource } from "../training/generator";
-import { movementFocuses, trainingPath, weekdays, type Exercise } from "../training/model";
-import { ExerciseAuthor, FormMessage, PageTitle } from "../training/ui";
+import { addDays, formatDate, movementFocuses, trainingPath, weekdays, weekStart, type Exercise } from "../training/model";
+import { ExerciseAuthor, FormMessage, PageTitle, useLocalToday } from "../training/ui";
 
 export const meta = () => [{ title: "Weekly plan | Torchsnuffers Training" }];
 
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await requireTrainingUser(request);
-  const [exercises, entries, days] = await Promise.all([listExercises(user), listWeeklyPlan(user), listWeeklyDays(user)]);
-  return { exercises, entries, days };
+  const { today, from, to } = lockWindow();
+  const [exercises, entries, days, locked] = await Promise.all([
+    listExercises(user), listWeeklyPlan(user), listWeeklyDays(user), listLockedDays(user, from, to),
+  ]);
+  return { exercises, entries, days, lockedDates: locked.map(d => d.date), today };
 }
 
 export async function action({ request }: Route.ActionArgs) {
   const user = await requireTrainingUser(request);
   const form = await readFormData(request);
-  const error = form.get("intent") === "generate" ? await generateWeeklyPlan(user, form) : await updateWeeklyPlan(user, form);
+  const intent = form.get("intent");
+  const error = intent === "generate" ? await generateWeeklyPlan(user, form)
+    : intent === "lock" ? await lockWeek(user, form) : await updateWeeklyPlan(user, form);
   if (error) return data({ error }, { status: 400 });
-  return redirect(trainingPath + "/weekly-plan");
+  return redirect(trainingPath + (intent === "lock" ? "/log" : "/weekly-plan"));
 }
 
 const sources: [ExerciseSource, string][] = [
@@ -74,7 +80,25 @@ function Generator({ exercises, days, busy }: { exercises: Exercise[]; days: { k
   </Form>;
 }
 
-export default function WeeklyPlan({ loaderData: { exercises, entries, days }, actionData }: Route.ComponentProps) {
+function LockWeek({ lockedDates, today: serverToday, busy, empty }: {
+  lockedDates: string[]; today: string; busy: boolean; empty: boolean;
+}) {
+  const today = useLocalToday(serverToday);
+  const start = weekStart(today);
+  const locked = lockedDates.some(d => d >= start && d <= addDays(start, 6));
+  const range = formatDate(start) + "–" + formatDate(addDays(start, 6));
+  return <Form method="post" className="tr-form mt-8 border border-primary/40 p-4">
+    <h2>{locked ? "This week is locked in" : "Lock in this week"}</h2>
+    <input type="hidden" name="intent" value="lock"/>
+    <input type="hidden" name="today" value={today}/>
+    <p className="tr-muted">{locked
+      ? `${range} is set in your training log. Locking in again replaces it with this plan, including any exercises you changed while logging.`
+      : `Set ${range} to this plan so each day's workout is ready in your training log. You can still swap exercises while you log.`}</p>
+    <button className="tr-button" type="submit" disabled={busy || empty}>{locked ? "Lock in this week again" : "Lock in this week"}</button>
+  </Form>;
+}
+
+export default function WeeklyPlan({ loaderData: { exercises, entries, days, lockedDates, today }, actionData }: Route.ComponentProps) {
   const busy = useNavigation().state !== "idle";
   const pins = entries.filter(entry => entry.pinned);
   return <>
@@ -125,5 +149,6 @@ export default function WeeklyPlan({ loaderData: { exercises, entries, days }, a
         ))}</ul> : <p className="tr-muted">{kind === "Rest" ? "Rest day" : "No exercises planned"}</p>}
       </section>;
     })}</div>
+    <LockWeek lockedDates={lockedDates} today={today} busy={busy} empty={!entries.length}/>
   </>;
 }

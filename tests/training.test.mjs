@@ -27,7 +27,6 @@ test("training routes share accounts, isolate private libraries and save perform
     await pool.query(migration);
     await pool.query(migration);
     assert.equal((await pool.query("SELECT id FROM training_exercises")).rowCount, 0);
-    assert.equal((await pool.query("SELECT id FROM training_workouts")).rowCount, 0);
     const { rows: [creator, otherUser] } = await pool.query(
       "INSERT INTO users (email, name, password_hash) VALUES ('a@example.test', 'Alex', $1), ('b@example.test', 'Sam', $1) RETURNING id",
       [await bcrypt.hash("demo-pass", 4)],
@@ -39,7 +38,7 @@ test("training routes share accounts, isolate private libraries and save perform
     }));
     assert.equal((await get("/")).headers.get("Location"), "/workouts");
     assert.equal((await handle(new Request("https://torchsnuffers.com/"))).status, 200);
-    assert.match(await (await get("/workouts")).text(), /Log in to see your workout library/);
+    assert.equal((await get("/workouts")).headers.get("Location"), "/workouts/log");
     assert.match((await get("/workouts/log")).headers.get("Location"), /sign-in/);
     const login = async email => {
       const response = await post("/workouts/sign-in?next=/workouts/log", { email, password: "demo-pass" });
@@ -47,7 +46,8 @@ test("training routes share accounts, isolate private libraries and save perform
       return response.headers.get("set-cookie").split(";")[0];
     };
     const a = await login("a@example.test"), b = await login("b@example.test");
-    assert.match(await (await get("/workouts/new", a)).text(), /Add your first exercise/);
+    assert.match(await (await get("/workouts/weekly-plan", a)).text(), /Add your first exercise/);
+    assert.match(await (await get("/workouts/log", a)).text(), /No week locked in/);
     const lift = {
       name: "Test lift", focus: "Push", muscle_groups: "Chest", goals: "Power", unit: "reps",
       author_id: String(otherUser.id), author_name: "Forged name",
@@ -62,7 +62,7 @@ test("training routes share accounts, isolate private libraries and save perform
     const badGoals = new URLSearchParams(form);
     badGoals.append("goals", "Unknown");
     assert.equal((await post("/workouts/exercises/new", badGoals, a)).status, 400);
-    assert.equal((await post("/workouts/exercises/new?next=workout", form, a)).headers.get("Location"), "/workouts/new");
+    assert.equal((await post("/workouts/exercises/new?next=weekly-plan", form, a)).headers.get("Location"), "/workouts/weekly-plan");
     const { rows: [exercise] } = await pool.query("SELECT * FROM training_exercises WHERE name = 'Test lift'");
     assert.equal(exercise.author_id, creator.id);
     assert.equal(exercise.author_name, "Alex");
@@ -76,24 +76,9 @@ test("training routes share accounts, isolate private libraries and save perform
     assert.doesNotMatch(library, /Forged name/);
     assert.doesNotMatch(await (await get("/workouts/exercises", b)).text(), /Test lift/);
     assert.doesNotMatch(await (await get("/workouts/exercises")).text(), /Test lift/);
-    const plan = { name: "Personal plan", focus: "Push", goals: "Strength", muscle_groups: "Chest",
-      minutes: "20", exercise: exercise.id, sets: "2", target: "10" };
-    assert.equal((await post("/workouts/new", { ...plan, muscle_groups: "" }, a)).status, 400);
-    assert.equal((await post("/workouts/new", plan, b)).status, 400);
-    const workoutForm = new URLSearchParams(plan);
-    workoutForm.delete("goals");
-    assert.equal((await post("/workouts/new", workoutForm, a)).status, 400);
-    workoutForm.append("goals", "Endurance");
-    workoutForm.append("goals", "Strength");
-    const path = (await post("/workouts/new", workoutForm, a)).headers.get("Location");
-    assert.ok(path?.startsWith("/workouts/"));
-    const detail = await (await get(path, a)).text();
-    for (const label of ["Push", "Strength, Endurance", "Chest, Triceps", "Power, Endurance", "Alex"]) assert.ok(detail.includes(label));
+    for (const label of ["Push", "Chest, Triceps", "Power, Endurance", "Alex"]) assert.ok(library.includes(label));
     await pool.query(migration);
     assert.equal((await pool.query("SELECT id FROM training_exercises")).rowCount, 1);
-    assert.equal((await pool.query("SELECT id FROM training_workouts")).rowCount, 1);
-    assert.equal((await get(path, b)).status, 404);
-    assert.doesNotMatch(await (await get("/workouts")).text(), /Personal plan/);
     const weeklyPath = "/workouts/weekly-plan";
     const monday = { intent: "add", day: "1", exercise: exercise.id, user_id: String(otherUser.id) };
     const sunday = { ...monday, day: "7" };
@@ -178,14 +163,60 @@ test("training routes share accounts, isolate private libraries and save perform
     assert.equal((await post(weeklyPath, { intent: "generate", strength_days: "2", endurance_days: "1", source: "picks" }, a)).status, 302);
     assert.ok(!(await readWeek()).some(e => e.day === 7 && e.id === exercise.id));
 
-    const session = { submission: randomUUID(), date: "2026-11-20", notes: "First session", "quantity-1-1": "8", "weight-1-1": "12.5", "quantity-1-3": "6" };
-    assert.equal((await post(path + "/log", { ...session, date: "2026-02-30" }, a)).status, 400);
-    assert.equal((await post(path + "/log", session, b)).status, 404);
-    const saves = await Promise.all([post(path + "/log", session, a), post(path + "/log", session, a)]);
+    // Lock the plan onto this week's dates, then log one of its days.
+    const today = new Date().toISOString().slice(0, 10);
+    const shift = days => new Date(Date.parse(today) + days * 864e5).toISOString().slice(0, 10);
+    assert.equal((await post(weeklyPath, { intent: "lock", today: shift(5) }, a)).status, 400);
+    assert.equal((await post(weeklyPath, { intent: "lock", today }, b)).status, 400);
+    const planBeforeLock = await readWeek();
+    assert.equal((await post(weeklyPath, { intent: "lock", today }, a)).headers.get("Location"), "/workouts/log");
+    assert.equal((await post(weeklyPath, { intent: "lock", today }, a)).status, 302);
+    const lockedRows = async () => (await pool.query(
+      `SELECT to_char(planned_on, 'YYYY-MM-DD') AS date, extract(isodow FROM planned_on)::int AS day, position, exercise_id AS id
+       FROM training_locked_exercises WHERE user_id = $1 ORDER BY planned_on, position`, [creator.id])).rows;
+    const locked = await lockedRows();
+    assert.deepEqual(locked.map(({ day, id }) => ({ day, id })), planBeforeLock.map(({ day, id }) => ({ day, id })));
+    const { rows: lockedDays } = await pool.query(
+      "SELECT to_char(min(planned_on), 'YYYY-MM-DD') AS start, count(*)::int AS n FROM training_locked_days WHERE user_id = $1", [creator.id]);
+    assert.equal(lockedDays[0].n, 7);
+    assert.equal(new Date(lockedDays[0].start).getUTCDay(), 1);
+    assert.ok(lockedDays[0].start <= today && today <= shift(6 - ((new Date(today).getUTCDay() + 6) % 7)));
+    assert.match(await (await get("/workouts/log", a)).text(), /Week of/);
+    assert.match(await (await get("/workouts/weekly-plan", a)).text(), /This week is locked in/);
+
+    const day = locked[0];
+    const dayPath = "/workouts/log/" + day.date;
+    assert.equal((await get(dayPath, b)).status, 404);
+    assert.equal((await get("/workouts/log/2026-02-30", a)).status, 404);
+    assert.match(await (await get(dayPath, a)).text(), new RegExp(day.id));
+    await pool.query(`INSERT INTO training_exercises (id, author_id, author_name, name, focus, goals, muscle_groups, unit)
+      VALUES ('Swap lift',$1,'Alex','Swap lift','Push',ARRAY['Strength'],ARRAY['Chest'],'reps'),
+             ('Other user lift',$2,'Sam','Other user lift','Push',ARRAY['Strength'],ARRAY['Chest'],'reps')`, [creator.id, otherUser.id]);
+    const swap = { intent: "swap", position: String(day.position), exercise: "Swap lift" };
+    assert.equal((await post(dayPath, { ...swap, exercise: "Other user lift" }, a)).status, 400);
+    assert.equal((await post(dayPath, swap, b)).status, 400);
+    assert.equal((await post(dayPath, swap, a)).status, 200);
+    assert.equal((await post(dayPath, { intent: "add", exercise: "Swap lift" }, a)).status, 400);
+    assert.equal((await lockedRows()).find(r => r.date === day.date && r.position === day.position).id, "Swap lift");
+    assert.deepEqual(await readWeek(), planBeforeLock);
+    assert.equal((await post(dayPath, { intent: "add", exercise: day.id }, a)).status, 200);
+    const added = (await lockedRows()).filter(r => r.date === day.date).at(-1);
+    assert.equal(added.id, day.id);
+    assert.equal((await post(dayPath, { intent: "remove", position: String(added.position) }, a)).status, 200);
+    assert.ok(!(await lockedRows()).some(r => r.date === day.date && r.id === day.id));
+
+    const p = day.position;
+    const session = { intent: "record", submission: randomUUID(), date: "2026-11-20", notes: "First session",
+      ["exercise-" + p]: "Swap lift", [`quantity-${p}-1`]: "8", [`weight-${p}-1`]: "12.5", [`quantity-${p}-3`]: "6" };
+    assert.equal((await post(dayPath, { ...session, date: "2026-02-30" }, a)).status, 400);
+    assert.equal((await post(dayPath, { ...session, ["exercise-" + p]: day.id }, a)).status, 400);
+    assert.equal((await post(dayPath, session, b)).status, 404);
+    const saves = await Promise.all([post(dayPath, session, a), post(dayPath, session, a)]);
     assert.ok(saves.every(r => r.headers.get("Location") === "/workouts/log"));
-    const { rows: sessions } = await pool.query("SELECT movements FROM training_sessions");
+    const { rows: sessions } = await pool.query("SELECT workout_name, movements FROM training_sessions");
     assert.equal(sessions.length, 1);
-    assert.deepEqual(sessions[0].movements, [{ name: "Test lift", author_name: "Alex", unit: "reps", sets: [{ quantity: 8, weight: 12.5 }, { quantity: 6, weight: null }] }]);
+    assert.match(sessions[0].workout_name, /^\w+day strength$/);
+    assert.deepEqual(sessions[0].movements, [{ name: "Swap lift", author_name: "Alex", unit: "reps", sets: [{ quantity: 8, weight: 12.5 }, { quantity: 6, weight: null }] }]);
     assert.match(await (await get("/workouts/log", a)).text(), /First session/);
     assert.doesNotMatch(await (await get("/workouts/log", b)).text(), /First session/);
     assert.equal((await post("/workouts", {}, a)).headers.get("Location"), "/workouts");

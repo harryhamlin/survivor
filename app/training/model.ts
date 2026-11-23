@@ -24,20 +24,31 @@ export interface Exercise extends TrainingFocus {
   name: string;
   unit: (typeof exerciseUnits)[number];
 }
-export interface Workout extends TrainingFocus {
-  id: string;
-  name: string;
-  minutes: number;
-  description: string;
-}
-export interface Movement extends Exercise {
+export interface PlannedExercise extends Exercise {
   position: number;
-  sets: number;
-  target: number;
 }
+export const defaultLoggedSets = 3;
 export interface RecordedMovement {
   author_name: string;
   name: string;
   unit: Exercise["unit"];
   sets: { quantity: number; weight: number | null }[];
 }
+
+// Calendar dates are ISO strings (YYYY-MM-DD) handled in UTC so the arithmetic never shifts a day.
+const parseDate = (date: string) => new Date(date + "T00:00:00Z");
+export const isoDate = (date: Date) => date.toISOString().slice(0, 10);
+export function addDays(date: string, days: number) {
+  const d = parseDate(date);
+  d.setUTCDate(d.getUTCDate() + days);
+  return isoDate(d);
+}
+// ISO weekday: Monday = 1 … Sunday = 7, matching the weekly plan.
+export const dayOfWeek = (date: string) => ((parseDate(date).getUTCDay() + 6) % 7) + 1;
+export const weekStart = (date: string) => addDays(date, 1 - dayOfWeek(date));
+export function localToday() {
+  const now = new Date();
+  return isoDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000));
+}
+export const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+export const formatDate = (date: string) => shortDate.format(parseDate(date));

@@ -225,19 +225,19 @@ EXTRA_PICK_TEST_DATABASE_URL=postgresql://localhost/postgres node --test tests/e
 
 ## Workout tracker
 
-Open `/workouts` locally to browse the workout and exercise libraries. Existing
-Torchsnuffers accounts can add private exercises, build ordered workout plans,
-and record completed sets, weights in pounds, dates, and notes in their training
-log. Accounts are shared through the existing Postgres connection. Sign in on
+Open `/workouts` locally to reach the training log. Existing Torchsnuffers
+accounts can add private exercises, generate a weekly plan, lock it in for the
+current week, and record completed sets, weights in pounds, dates, and notes
+against each day's workout. Accounts are shared through the existing Postgres connection. Sign in on
 each hostname using the same credentials.
 
 Run `npm run db:migrate` before starting the app. The Heroku release phase runs
 the same migration. For the planned reset, the six training tables are
-`training_weekly_days`, `training_weekly_plan`, `training_workout_exercises`, `training_sessions`, `training_workouts`, and
+`training_locked_exercises`, `training_locked_days`, `training_weekly_days`, `training_weekly_plan`, `training_sessions`, and
 `training_exercises`. After the manual reset, `db/workouts.sql` creates empty
 libraries. Re-running the migration preserves entries you have since added.
 
-Add an exercise first, then use it in a workout. Both forms take one movement
+Add exercises to your library first. Each takes one movement
 focus (push, pull, legs, core, PT), one or more muscle groups, and one or more
 training goals (power, strength, endurance, cardiovascular). The library goal filter matches
 any selected goal. Each exercise stores its signed-in creator and
@@ -263,7 +263,14 @@ that week. Each endurance day gets one Cardio exercise. Exercises can come
 from your library at random, only from exercises you choose, or from your
 choices with the remaining slots filled randomly. `training_weekly_days` stores
 each day's type.
-The workout hostname opens `/workouts`.
+
+Below the schedule, **Lock in this week** copies the plan onto the dated
+Monday–Sunday containing the browser's today (`training_locked_days` and
+`training_locked_exercises`). Locking in again replaces that week. The training
+log at `/workouts/log` lists the locked week; each day opens
+`/workouts/log/YYYY-MM-DD`, where you can swap, add or remove exercises while you
+log. Those edits change only the locked day, not the repeating plan.
+The workout hostname opens `/workouts`, which redirects to the training log.
 
 To activate the subdomain on the existing Heroku app, deploy the changes and run
 `heroku domains:add workouts.torchsnuffers.com --app survivor-hham`. At the DNS

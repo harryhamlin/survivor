@@ -30,11 +30,11 @@ const pool = new pg.Pool({
 // this run actually built it or found it already in place.
 const TABLES = [
   "training_exercises",
-  "training_workouts",
-  "training_workout_exercises",
   "training_sessions",
   "training_weekly_plan",
   "training_weekly_days",
+  "training_locked_days",
+  "training_locked_exercises",
   "survivor_stats",
   "tribal_episodes",
   "users",
