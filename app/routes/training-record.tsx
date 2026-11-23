@@ -4,7 +4,7 @@ import { data, Form, redirect } from "react-router";
 import type { Route } from "./+types/training-record";
 import { getWorkout, recordSession, requireTrainingUser } from "../training/data.server";
 import { maxLoggedSets, trainingPath } from "../training/model";
-import { BackLink, FormMessage, PageTitle, SaveButton } from "../training/ui";
+import { BackLink, FormMessage, PageTitle, SaveButton, ExerciseAuthor } from "../training/ui";
 import { readFormData } from "../security.server";
 
 export const meta = () => [{ title: "Log session | Torchsnuffers Training" }];
@@ -30,6 +30,7 @@ export default function Record({ loaderData: { workout, movements, submission, t
     <Form method="post" className="tr-form"><input name="submission" type="hidden" value={submission}/>
       <label>Training date<input type="date" name="date" required value={date} onChange={e => setDate(e.target.value)}/></label>
       {movements.map(m => <fieldset className="tr-fieldset" key={m.position}><legend>{m.name}</legend>
+        <ExerciseAuthor name={m.author_name}/>
         <p className="tr-muted">Plan · {m.sets} × {m.target} {m.unit}</p>
         <div className="tr-set-head" aria-hidden="true"><span>Set</span><span>{m.unit === "seconds" ? "Seconds" : "Reps"}</span><span>Weight (lb)</span></div>
         {Array.from({ length: m.sets + (extraSets[m.position] ?? 0) }, (_, index) => {

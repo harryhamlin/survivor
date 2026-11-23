@@ -3,7 +3,7 @@ import type { Route } from "./+types/training-detail";
 import { getUserId } from "../session.server";
 import { getWorkout } from "../training/data.server";
 import { trainingPath } from "../training/model";
-import { BackLink, PageTitle, WorkoutMeta } from "../training/ui";
+import { BackLink, PageTitle, WorkoutMeta, FocusSummary, ExerciseAuthor } from "../training/ui";
 
 export const meta = ({ loaderData }: Route.MetaArgs) => [{ title: (loaderData?.workout.name ?? "Workout") + " | Torchsnuffers Training" }];
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -11,9 +11,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 export default function Detail({ loaderData: { workout, movements } }: Route.ComponentProps) {
   return <><BackLink/><PageTitle title={workout.name}><Link className="tr-button" to={trainingPath + "/" + workout.id + "/log"}>Log session</Link></PageTitle>
-    <p className="tr-intro">{workout.description}</p><WorkoutMeta minutes={workout.minutes} count={movements.length}/>
+    <p><FocusSummary {...workout}/></p>{workout.description && <p className="tr-intro">{workout.description}</p>}<WorkoutMeta minutes={workout.minutes} count={movements.length}/>
     <section className="tr-section"><h2>Exercise plan</h2><ol className="tr-list">{movements.map(m =>
-      <li key={m.position} className="tr-plan"><div><p className="tr-muted">{m.equipment}</p><h3>{m.name}</h3><p className="tr-muted">{m.cue}</p></div>
+      <li key={m.position} className="tr-plan"><div><p className="tr-muted">{m.equipment}</p><h3>{m.name}</h3><p><ExerciseAuthor name={m.author_name}/></p><p><FocusSummary {...m}/></p><p className="tr-muted">{m.cue}</p></div>
       <strong>{m.sets} × {m.target} {m.unit}</strong></li>)}</ol></section>
   </>;
 }

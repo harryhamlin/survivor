@@ -10,6 +10,7 @@ const loginPath = trainingPath + "/sign-in";
 const libraryLinks = [
   { to: trainingPath, label: "workout library" },
   { to: trainingPath + "/exercises", label: "exercise library" },
+  { to: trainingPath + "/weekly-plan", label: "weekly plan" },
   { to: trainingPath + "/log", label: "training log" },
 ];
 

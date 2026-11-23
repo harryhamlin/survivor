@@ -16,6 +16,7 @@ export default [
     route("new", "routes/training-new-workout.tsx"),
     route("sign-in", "routes/training-login.tsx"),
     route("log", "routes/training-history.tsx"),
+    route("weekly-plan", "routes/training-weekly-plan.tsx"),
     route(":workoutId", "routes/training-detail.tsx"),
     route(":workoutId/log", "routes/training-record.tsx"),
   ]),

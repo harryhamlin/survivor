@@ -232,8 +232,21 @@ log. Accounts are shared through the existing Postgres connection. Sign in on
 each hostname using the same credentials.
 
 Run `npm run db:migrate` before starting the app. The Heroku release phase runs
-the same migration and loads the starter libraries from `db/workouts.sql`.
-The workout hostname routes its homepage to `/workouts`.
+the same migration. For the planned reset, the four tables being replaced are
+`training_workout_exercises`, `training_sessions`, `training_workouts`, and
+`training_exercises`. After the manual reset, `db/workouts.sql` creates empty
+libraries. Re-running the migration preserves entries you have since added.
+
+Add an exercise first, then use it in a workout. Both forms take one movement
+focus (push, pull, legs, core), one or more muscle groups, and one training goal
+(power, strength, endurance). Each exercise stores its signed-in creator and
+their display name at creation. Accounts without a display name are credited
+as “Member” followed by their account ID.
+
+At `/workouts/weekly-plan`, assign exercises to a repeating Monday–Sunday plan.
+The `training_weekly_plan` table stores one row per user, weekday (Monday = 1,
+Sunday = 7), and exercise. Plan changes are independent of completed sessions.
+The workout hostname opens `/workouts`.
 
 To activate the subdomain on the existing Heroku app, deploy the changes and run
 `heroku domains:add workouts.torchsnuffers.com --app survivor-hham`. At the DNS

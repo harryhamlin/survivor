@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
-import { data, Form, redirect } from "react-router";
+import { data, Form, Link, redirect } from "react-router";
 import type { Route } from "./+types/training-new-workout";
 import { createWorkout, listExercises, requireTrainingUser } from "../training/data.server";
 import { trainingPath } from "../training/model";
-import { BackLink, FocusField, FormMessage, PageTitle, SaveButton } from "../training/ui";
+import { BackLink, FocusFields, FormMessage, PageTitle, SaveButton } from "../training/ui";
 import { readFormData } from "../security.server";
 
 export const meta = () => [{ title: "Create workout | Torchsnuffers Training" }];
@@ -17,12 +17,17 @@ export async function action({ request }: Route.ActionArgs) {
   return redirect(trainingPath + "/" + result.id);
 }
 export default function NewWorkout({ loaderData: { exercises }, actionData }: Route.ComponentProps) {
-  const [rows, setRows] = useState([{ key: 0, exerciseId: exercises[0].id }]);
+  const [rows, setRows] = useState([{ key: 0, exerciseId: exercises[0]?.id ?? "" }]);
   const nextKey = useRef(1);
+  if (!exercises.length) return <><BackLink/><PageTitle title="Create workout"/>
+    <p className="tr-intro">Add your first exercise to start building a workout.</p>
+    <Link className="tr-button" to={trainingPath + "/exercises/new?next=workout"}>Add exercise</Link>
+  </>;
   return <div className="mx-auto max-w-lg"><BackLink/><PageTitle title="Create workout"/>
     <Form method="post" className="tr-form">
       <label>Workout name<input name="name" maxLength={80} required/></label>
-      <div className="tr-pair"><FocusField/><label>Duration (minutes)<input name="minutes" type="number" min={1} max={600} required defaultValue={30}/></label></div>
+      <FocusFields/>
+      <label>Duration (minutes)<input name="minutes" type="number" min={1} max={600} required defaultValue={30}/></label>
       <label>Description (optional)<textarea name="description" maxLength={500} rows={2}/></label>
       <h2>Exercise plan</h2>
       {rows.map((row, i) => <fieldset key={row.key} className="tr-fieldset">
