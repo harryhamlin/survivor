@@ -25,7 +25,7 @@ export default function NewExercise({ actionData }: Route.ComponentProps) {
     <Form method="post" className="tr-form">
       <label>Exercise name<input name="name" maxLength={80} required/></label>
       <FocusFields/>
-      <label>Track by<select name="unit"><option value="reps">Repetitions</option><option value="seconds">Time in seconds</option></select></label>
+      <label>Track by<select name="unit"><option value="reps">Repetitions</option><option value="seconds">Time in seconds</option><option value="minutes">Time in minutes</option></select></label>
       <FormMessage error={actionData?.error}/><SaveButton>Save exercise</SaveButton>
     </Form></div>;
 }

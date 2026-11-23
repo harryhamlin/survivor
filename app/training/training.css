@@ -15,6 +15,7 @@
 .tr-choices { @apply grid grid-cols-2 gap-2; }
 :is(.tr-form, .tr-tools) .tr-choices label { @apply flex items-center gap-2 space-y-0; }
 .tr-choices input { @apply size-4 shrink-0 accent-primary; }
+.tr-choices.tr-stack { @apply grid-cols-1; }
 .tr-list { @apply divide-y divide-primary/20 border border-primary/40; }
 .tr-item summary { @apply cursor-pointer px-4 py-3 hover:bg-primary/10; }
 .tr-item summary strong { @apply break-words font-medium; }

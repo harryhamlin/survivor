@@ -112,6 +112,21 @@ test("training routes share accounts, isolate private libraries and save perform
     assert.equal((await post(weeklyPath, { ...monday, intent: "remove" }, a)).headers.get("Location"), weeklyPath);
     assert.deepEqual((await pool.query("SELECT day_of_week FROM training_weekly_plan")).rows, [{ day_of_week: 7 }]);
 
+    const generate = { intent: "generate", strength_days: "1", endurance_days: "1", source: "picks", pick: exercise.id };
+    for (const invalid of [{ endurance_days: "7" }, { pick: "missing" }, { source: "unknown" }, { strength_days: "0" }]) {
+      assert.equal((await post(weeklyPath, { ...generate, ...invalid }, a)).status, 400);
+    }
+    assert.equal((await post(weeklyPath, generate, b)).status, 400);
+    assert.equal((await post(weeklyPath, generate, a)).headers.get("Location"), weeklyPath);
+    const { rows: dayKinds } = await pool.query(
+      "SELECT kind, count(*)::int AS n FROM training_weekly_days WHERE user_id = $1 GROUP BY kind ORDER BY kind", [creator.id]);
+    assert.deepEqual(dayKinds, [{ kind: "Endurance", n: 1 }, { kind: "Rest", n: 5 }, { kind: "Strength", n: 1 }]);
+    const { rows: generated } = await pool.query(
+      `SELECT p.exercise_id, d.kind FROM training_weekly_plan p
+       JOIN training_weekly_days d USING (user_id, day_of_week) WHERE p.user_id = $1`, [creator.id]);
+    assert.deepEqual(generated, [{ exercise_id: exercise.id, kind: "Strength" }]);
+    assert.match(await (await get(weeklyPath, a)).text(), /Rest day/);
+
     const session = { submission: randomUUID(), date: "2026-11-20", notes: "First session", "quantity-1-1": "8", "weight-1-1": "12.5", "quantity-1-3": "6" };
     assert.equal((await post(path + "/log", { ...session, date: "2026-02-30" }, a)).status, 400);
     assert.equal((await post(path + "/log", session, b)).status, 404);

@@ -34,6 +34,7 @@ const TABLES = [
   "training_workout_exercises",
   "training_sessions",
   "training_weekly_plan",
+  "training_weekly_days",
   "survivor_stats",
   "tribal_episodes",
   "users",

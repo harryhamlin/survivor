@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { data, Form, redirect } from "react-router";
 import type { Route } from "./+types/training-record";
 import { getWorkout, recordSession, requireTrainingUser } from "../training/data.server";
-import { maxLoggedSets, trainingPath } from "../training/model";
+import { maxLoggedSets, trainingPath, unitLabels } from "../training/model";
 import { BackLink, FormMessage, PageTitle, SaveButton, ExerciseAuthor } from "../training/ui";
 import { readFormData } from "../security.server";
 
@@ -32,7 +32,7 @@ export default function Record({ loaderData: { workout, movements, submission, t
       {movements.map(m => <fieldset className="tr-fieldset" key={m.position}><legend>{m.name}</legend>
         <ExerciseAuthor name={m.author_name}/>
         <p className="tr-muted">Plan · {m.sets} × {m.target} {m.unit}</p>
-        <div className="tr-set-head" aria-hidden="true"><span>Set</span><span>{m.unit === "seconds" ? "Seconds" : "Reps"}</span><span>Weight (lb)</span></div>
+        <div className="tr-set-head" aria-hidden="true"><span>Set</span><span>{unitLabels[m.unit]}</span><span>Weight (lb)</span></div>
         {Array.from({ length: m.sets + (extraSets[m.position] ?? 0) }, (_, index) => {
           const key = m.position + "-" + (index + 1);
           return <div className="tr-set" key={key}><span>{index + 1}</span>

@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { data, Form, Link, redirect } from "react-router";
 import type { Route } from "./+types/training-new-workout";
 import { createWorkout, listExercises, requireTrainingUser } from "../training/data.server";
-import { trainingPath } from "../training/model";
+import { trainingPath, unitLabels } from "../training/model";
 import { BackLink, FocusFields, FormMessage, PageTitle, SaveButton } from "../training/ui";
 import { readFormData } from "../security.server";
 
@@ -36,7 +36,7 @@ export default function NewWorkout({ loaderData: { exercises }, actionData }: Ro
           onChange={event => setRows(rows.map(r => r.key === row.key ? { ...r, exerciseId: event.target.value } : r))}>
           {exercises.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></label>
         <label>Sets<input type="number" min={1} max={8} name="sets" required defaultValue={3}/></label>
-        <label>{exercises.find(e => e.id === row.exerciseId)?.unit === "seconds" ? "Seconds" : "Reps"} per set
+        <label>{unitLabels[exercises.find(e => e.id === row.exerciseId)?.unit ?? "reps"]} per set
           <input type="number" min={1} max={3600} name="target" required defaultValue={10}/></label></div>
         {rows.length > 1 && <button type="button" className="tr-text-link" aria-label={"Remove exercise " + (i + 1)}
           onClick={() => setRows(rows.filter(r => r.key !== row.key))}>Remove</button>}

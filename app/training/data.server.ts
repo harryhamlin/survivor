@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { redirect } from "react-router";
 import pool from "../db.server";
 import { getUserId } from "../session.server";
-import { maxLoggedSets, movementFocuses, muscleGroups, trainingGoals, trainingPath } from "./model";
+import { exerciseUnits, maxLoggedSets, movementFocuses, muscleGroups, trainingGoals, trainingPath } from "./model";
+import { exerciseSources, generateWeek, planError, type DayKind } from "./generator";
 import type { Exercise, Movement, RecordedMovement, TrainingFocus, Workout } from "./model";
 
 export async function requireTrainingUser(request: Request) {
@@ -66,7 +67,7 @@ export async function createExercise(userId: number, form: FormData) {
   const tags = readFocus(form);
   if (!tags) return focusError;
   const name = value(form, "name"), unit = value(form, "unit");
-  if (!name || name.length > 80 || !["reps", "seconds"].includes(unit)) {
+  if (!name || name.length > 80 || !exerciseUnits.some(option => option === unit)) {
     return "Check the exercise name and tracking unit.";
   }
 
@@ -133,7 +134,7 @@ export async function recordSession(userId: number, id: string, form: FormData) 
       if (!amount && !load) continue;
       const quantity = Number(amount), weight = load ? Number(load) : null;
       if (!integer(quantity, 3600) || (weight !== null && (!Number.isFinite(weight) || weight < 0 || weight > 5000))) {
-        return "Check the reps or seconds and optional weight for " + move.name + ", set " + i + ".";
+        return "Check the amount and optional weight for " + move.name + ", set " + i + ".";
       }
       sets.push({ quantity, weight });
     }
@@ -157,7 +158,7 @@ export async function listWeeklyPlan(userId: number) {
     `SELECT p.day_of_week, p.exercise_id, e.name, e.author_name
      FROM training_weekly_plan p
      JOIN training_exercises e ON e.author_id = p.user_id AND e.id = p.exercise_id
-     WHERE p.user_id = $1 ORDER BY p.day_of_week, e.name, e.id`, [userId]);
+     WHERE p.user_id = $1 ORDER BY p.day_of_week, p.position, e.name, e.id`, [userId]);
   return rows;
 }
 
@@ -168,8 +169,10 @@ export async function updateWeeklyPlan(userId: number, form: FormData) {
   switch (value(form, "intent")) {
     case "add": {
       const result = await pool.query(
-        `INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id)
-         SELECT author_id, $2, id FROM training_exercises WHERE author_id = $1 AND id = $3
+        `INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id, position)
+         SELECT author_id, $2, id, (SELECT COALESCE(MAX(position), 0) + 1 FROM training_weekly_plan
+           WHERE user_id = $1 AND day_of_week = $2)
+         FROM training_exercises WHERE author_id = $1 AND id = $3
          ON CONFLICT (user_id, day_of_week, exercise_id) DO NOTHING`, [userId, day, exercise]);
       if (!result.rowCount) return "Choose an exercise from your library that is not already on that day.";
       break;
@@ -180,5 +183,46 @@ export async function updateWeeklyPlan(userId: number, form: FormData) {
       break;
     default:
       return "Choose a plan action.";
+  }
+}
+
+export async function listWeeklyDays(userId: number) {
+  const { rows } = await pool.query<{ day_of_week: number; kind: DayKind }>(
+    "SELECT day_of_week, kind FROM training_weekly_days WHERE user_id = $1 ORDER BY day_of_week", [userId]);
+  return rows;
+}
+
+// Replaces the whole week: day types and planned exercises are written together.
+export async function generateWeeklyPlan(userId: number, form: FormData) {
+  const source = exerciseSources.find(option => option === value(form, "source"));
+  if (!source) return "Choose where exercises come from.";
+  const request = {
+    strengthDays: Number(value(form, "strength_days")),
+    enduranceDays: Number(value(form, "endurance_days")),
+    source,
+    picks: source === "random" ? [] : form.getAll("pick").map(String),
+  };
+  const library = await listExercises(userId);
+  const error = planError(library, request);
+  if (error) return error;
+  const week = generateWeek(library, request);
+  const entries = week.flatMap(d => d.exerciseIds.map((id, position) => ({ day: d.day, id, position })));
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1", [userId]);
+    await client.query("DELETE FROM training_weekly_days WHERE user_id = $1", [userId]);
+    await client.query(`INSERT INTO training_weekly_days (user_id, day_of_week, kind)
+      SELECT $1, day, kind FROM unnest($2::smallint[], $3::text[]) AS d(day, kind)`,
+      [userId, week.map(d => d.day), week.map(d => d.kind)]);
+    await client.query(`INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id, position)
+      SELECT $1, day, id, position FROM unnest($2::smallint[], $3::text[], $4::smallint[]) AS p(day, id, position)`,
+      [userId, entries.map(e => e.day), entries.map(e => e.id), entries.map(e => e.position)]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
 }

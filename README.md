@@ -232,14 +232,14 @@ log. Accounts are shared through the existing Postgres connection. Sign in on
 each hostname using the same credentials.
 
 Run `npm run db:migrate` before starting the app. The Heroku release phase runs
-the same migration. For the planned reset, the five training tables are
-`training_weekly_plan`, `training_workout_exercises`, `training_sessions`, `training_workouts`, and
+the same migration. For the planned reset, the six training tables are
+`training_weekly_days`, `training_weekly_plan`, `training_workout_exercises`, `training_sessions`, `training_workouts`, and
 `training_exercises`. After the manual reset, `db/workouts.sql` creates empty
 libraries. Re-running the migration preserves entries you have since added.
 
 Add an exercise first, then use it in a workout. Both forms take one movement
-focus (push, pull, legs, core), one or more muscle groups, and one or more
-training goals (power, strength, endurance). The library goal filter matches
+focus (push, pull, legs, core, PT), one or more muscle groups, and one or more
+training goals (power, strength, endurance, cardiovascular). The library goal filter matches
 any selected goal. Each exercise stores its signed-in creator and
 their display name at creation. Accounts without a display name are credited
 as “Member” followed by their account ID.
@@ -247,6 +247,19 @@ as “Member” followed by their account ID.
 At `/workouts/weekly-plan`, assign exercises to a repeating Monday–Sunday plan.
 The `training_weekly_plan` table stores one row per user, weekday (Monday = 1,
 Sunday = 7), and exercise. Plan changes are independent of completed sessions.
+
+The weekly plan generator asks for the number of strength and endurance days
+(the rest of the week is rest days), then replaces the whole plan. Strength days
+are spaced across the week and each is one full-body workout in this order: push
+(big muscles), push (small muscles), pull (big muscles), pull (small muscles),
+legs, then glutes, core or PT. Big push work includes chest, or shoulders and
+triceps together; big pull work includes lats or upper back; leg work without
+quads that hits glutes or abductors counts as glutes. Random slots draw from
+exercises tagged Strength (PT moves need no tag), favouring ones not yet used
+that week. Each endurance day gets one Cardio exercise. Exercises can come
+from your library at random, only from exercises you choose, or from your
+choices with the remaining slots filled randomly. `training_weekly_days` stores
+each day's type.
 The workout hostname opens `/workouts`.
 
 To activate the subdomain on the existing Heroku app, deploy the changes and run
