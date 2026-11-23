@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import { redirect } from "react-router";
 import pool from "../db.server";
 import { getUserId } from "../session.server";
 import { exerciseUnits, maxLoggedSets, movementFocuses, muscleGroups, trainingGoals, trainingPath } from "./model";
-import { exerciseSources, generateWeek, planError, type DayKind } from "./generator";
+import { exerciseSources, generateWeek, pinConflict, planError, type DayKind, type PinnedExercise } from "./generator";
 import type { Exercise, Movement, RecordedMovement, TrainingFocus, Workout } from "./model";
 
 export async function requireTrainingUser(request: Request) {
@@ -15,8 +16,8 @@ export async function requireTrainingUser(request: Request) {
   return userId;
 }
 
-export async function listExercises(userId: number | null) {
-  const { rows } = await pool.query<Exercise>(
+export async function listExercises(userId: number | null, db: Pick<PoolClient, "query"> = pool) {
+  const { rows } = await db.query<Exercise>(
     `SELECT id, name, focus, muscle_groups, goals, unit, author_name
      FROM training_exercises WHERE author_id = $1 ORDER BY name, id`, [userId]);
   return rows;
@@ -154,36 +155,66 @@ export async function listSessions(userId: number) {
 }
 
 export async function listWeeklyPlan(userId: number) {
-  const { rows } = await pool.query<{ day_of_week: number; exercise_id: string; name: string; author_name: string }>(
-    `SELECT p.day_of_week, p.exercise_id, e.name, e.author_name
+  const { rows } = await pool.query<{ day_of_week: number; exercise_id: string; name: string; author_name: string; pinned: boolean; focus: Exercise["focus"] }>(
+    `SELECT p.day_of_week, p.exercise_id, e.name, e.author_name, e.focus, p.pinned
      FROM training_weekly_plan p
      JOIN training_exercises e ON e.author_id = p.user_id AND e.id = p.exercise_id
      WHERE p.user_id = $1 ORDER BY p.day_of_week, p.position, e.name, e.id`, [userId]);
   return rows;
 }
 
+async function pinnedExercises(client: PoolClient, userId: number) {
+  const { rows } = await client.query<PinnedExercise>(
+    `SELECT p.day_of_week AS day, e.id, e.focus, e.goals, e.muscle_groups FROM training_weekly_plan p
+     JOIN training_exercises e ON e.author_id = p.user_id AND e.id = p.exercise_id
+     WHERE p.user_id = $1 AND p.pinned ORDER BY p.day_of_week, p.position, e.id`, [userId]);
+  return rows;
+}
+
+// Serialize edits and regeneration so a pin saved while a week is being filled survives either order.
+async function editWeek(userId: number, edit: (client: PoolClient) => Promise<string | void>) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE", [userId]);
+    const error = await edit(client);
+    await client.query(error ? "ROLLBACK" : "COMMIT");
+    return error;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function updateWeeklyPlan(userId: number, form: FormData) {
   const day = Number(value(form, "day"));
   const exercise = value(form, "exercise");
   if (!integer(day, 7) || !exercise) return "Choose a weekday and an exercise.";
-  switch (value(form, "intent")) {
-    case "add": {
-      const result = await pool.query(
-        `INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id, position)
-         SELECT author_id, $2, id, (SELECT COALESCE(MAX(position), 0) + 1 FROM training_weekly_plan
-           WHERE user_id = $1 AND day_of_week = $2)
-         FROM training_exercises WHERE author_id = $1 AND id = $3
-         ON CONFLICT (user_id, day_of_week, exercise_id) DO NOTHING`, [userId, day, exercise]);
-      if (!result.rowCount) return "Choose an exercise from your library that is not already on that day.";
-      break;
-    }
-    case "remove":
-      await pool.query("DELETE FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2 AND exercise_id = $3",
+  return editWeek(userId, async client => {
+    const intent = value(form, "intent");
+    if (intent === "remove") {
+      await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2 AND exercise_id = $3",
         [userId, day, exercise]);
-      break;
-    default:
-      return "Choose a plan action.";
-  }
+      return;
+    }
+    if (intent !== "add") return "Choose a plan action.";
+    const { rows: [candidate] } = await client.query<PinnedExercise>(
+      "SELECT $3::int AS day, id, focus, goals, muscle_groups FROM training_exercises WHERE author_id = $1 AND id = $2",
+      [userId, exercise, day]);
+    if (!candidate) return "Choose an exercise from your library.";
+    const pins = await pinnedExercises(client, userId);
+    const conflict = pinConflict(pins, candidate);
+    if (conflict) return conflict;
+    const result = await client.query(
+      `INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id, position, pinned)
+       SELECT $1, $2, $3, COALESCE(MAX(position), 0) + 1, true FROM training_weekly_plan
+       WHERE user_id = $1 AND day_of_week = $2
+       ON CONFLICT (user_id, day_of_week, exercise_id) DO UPDATE SET pinned = true WHERE NOT training_weekly_plan.pinned`,
+      [userId, day, exercise]);
+    if (!result.rowCount) return "That exercise is already pinned to this day.";
+  });
 }
 
 export async function listWeeklyDays(userId: number) {
@@ -196,33 +227,27 @@ export async function listWeeklyDays(userId: number) {
 export async function generateWeeklyPlan(userId: number, form: FormData) {
   const source = exerciseSources.find(option => option === value(form, "source"));
   if (!source) return "Choose where exercises come from.";
-  const request = {
-    strengthDays: Number(value(form, "strength_days")),
-    enduranceDays: Number(value(form, "endurance_days")),
-    source,
-    picks: source === "random" ? [] : form.getAll("pick").map(String),
-  };
-  const library = await listExercises(userId);
-  const error = planError(library, request);
-  if (error) return error;
-  const week = generateWeek(library, request);
-  const entries = week.flatMap(d => d.exerciseIds.map((id, position) => ({ day: d.day, id, position })));
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1", [userId]);
+  return editWeek(userId, async client => {
+    const request = {
+      strengthDays: Number(value(form, "strength_days")),
+      enduranceDays: Number(value(form, "endurance_days")),
+      source,
+      picks: source === "random" ? [] : form.getAll("pick").map(String),
+      pins: await pinnedExercises(client, userId),
+    };
+    const library = await listExercises(userId, client);
+    const error = planError(library, request);
+    if (error) return error;
+    const week = generateWeek(library, request);
+    const entries = week.flatMap(d => d.exerciseIds.map((id, position) => ({ day: d.day, id, position })));
+    await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1 AND NOT pinned", [userId]);
     await client.query("DELETE FROM training_weekly_days WHERE user_id = $1", [userId]);
     await client.query(`INSERT INTO training_weekly_days (user_id, day_of_week, kind)
       SELECT $1, day, kind FROM unnest($2::smallint[], $3::text[]) AS d(day, kind)`,
       [userId, week.map(d => d.day), week.map(d => d.kind)]);
     await client.query(`INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id, position)
-      SELECT $1, day, id, position FROM unnest($2::smallint[], $3::text[], $4::smallint[]) AS p(day, id, position)`,
+      SELECT $1, day, id, position FROM unnest($2::smallint[], $3::text[], $4::smallint[]) AS p(day, id, position)
+      ON CONFLICT (user_id, day_of_week, exercise_id) DO UPDATE SET position = EXCLUDED.position`,
       [userId, entries.map(e => e.day), entries.map(e => e.id), entries.map(e => e.position)]);
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }

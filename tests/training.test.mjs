@@ -106,6 +106,14 @@ test("training routes share accounts, isolate private libraries and save perform
     await post(weeklyPath, { ...sunday, intent: "remove" }, b);
     const { rows: scheduled } = await pool.query("SELECT user_id, day_of_week, exercise_id FROM training_weekly_plan ORDER BY day_of_week");
     assert.deepEqual(scheduled, [1, 7].map(day => ({ user_id: creator.id, day_of_week: day, exercise_id: exercise.id })));
+    // Simulate an upgrade from a plan without pin tracking. Only Monday was purely manual.
+    await pool.query("ALTER TABLE training_weekly_plan DROP COLUMN pinned");
+    await pool.query("INSERT INTO training_weekly_days VALUES ($1,7,'Strength')", [creator.id]);
+    await pool.query(migration);
+    assert.deepEqual((await pool.query("SELECT pinned FROM training_weekly_plan ORDER BY day_of_week")).rows,
+      [{ pinned: true }, { pinned: false }]);
+    assert.equal((await post(weeklyPath, sunday, a)).headers.get("Location"), weeklyPath);
+    await pool.query(migration);
     await assert.rejects(pool.query("INSERT INTO training_weekly_plan VALUES ($1,1,$2)", [otherUser.id, exercise.id]),
       e => e.code === "23503");
     assert.doesNotMatch(await (await get(weeklyPath, b)).text(), /Test lift/);
@@ -126,6 +134,49 @@ test("training routes share accounts, isolate private libraries and save perform
        JOIN training_weekly_days d USING (user_id, day_of_week) WHERE p.user_id = $1`, [creator.id]);
     assert.deepEqual(generated, [{ exercise_id: exercise.id, kind: "Strength" }]);
     assert.match(await (await get(weeklyPath, a)).text(), /Rest day/);
+
+    for (const [name, focus, group] of [
+      ["Other press", "Push", "Chest"], ["Triceps extension", "Push", "Triceps"],
+      ["Row", "Pull", "Lats"], ["Curl", "Pull", "Biceps"], ["Squat", "Legs", "Quads"],
+      ["Plank", "Core", "Abs"], ["Bike", "Cardio", "Quads"],
+    ]) {
+      await pool.query(`INSERT INTO training_exercises (id, author_id, author_name, name, focus, goals, muscle_groups, unit)
+        VALUES ($1,$2,'Alex',$1,$3,ARRAY['Strength'],ARRAY[$4::text],'reps')`, [name, creator.id, focus, group]);
+    }
+    const add = (day, id) => post(weeklyPath, { intent: "add", day, exercise: id }, a);
+    assert.equal((await add("1", exercise.id)).status, 302);
+    assert.equal((await add("7", "Triceps extension")).status, 302);
+    assert.equal((await add("3", "Bike")).status, 302);
+    assert.equal((await add("1", "Other press")).status, 400);
+    assert.equal((await add("3", "Plank")).status, 400);
+    const readWeek = async () => (await pool.query(
+      `SELECT day_of_week AS day, exercise_id AS id, pinned FROM training_weekly_plan
+       WHERE user_id = $1 ORDER BY day_of_week, position`, [creator.id])).rows;
+    const pinned = await readWeek();
+    const fill = { ...generate, strength_days: "2", source: "random" };
+    assert.equal((await post(weeklyPath, { ...fill, strength_days: "1" }, a)).status, 400);
+    assert.equal((await post(weeklyPath, { ...fill, endurance_days: "0" }, a)).status, 400);
+    assert.equal((await post(weeklyPath, { ...fill, source: "mix", pick: "Other press" }, a)).status, 400);
+    assert.deepEqual(await readWeek(), pinned);
+    const strengthOrder = [exercise.id, "Triceps extension", "Row", "Curl", "Squat", "Plank"];
+    for (const source of ["random", "mix"]) {
+      assert.equal((await post(weeklyPath, { ...fill, source }, a)).status, 302);
+      const week = await readWeek();
+      for (const day of [1, 7]) assert.deepEqual(week.filter(e => e.day === day).map(e => e.id), strengthOrder);
+      assert.deepEqual(week.filter(e => e.day === 3), [{ day: 3, id: "Bike", pinned: true }]);
+      assert.equal(week.filter(e => e.pinned).length, 4);
+    }
+    // Pin an auto-filled slot while a new week is being generated.
+    const simultaneous = await Promise.all([add("1", "Squat"), post(weeklyPath, fill, a)]);
+    assert.ok(simultaneous.every(r => r.status === 302));
+    assert.equal((await post(weeklyPath, { ...fill, source: "picks" }, a)).status, 302);
+    const onlyPins = await readWeek();
+    assert.equal(onlyPins.length, 5);
+    assert.ok(onlyPins.every(e => e.pinned));
+    assert.ok(onlyPins.some(e => e.day === 1 && e.id === "Squat"));
+    assert.equal((await post(weeklyPath, { ...sunday, intent: "remove" }, a)).status, 302);
+    assert.equal((await post(weeklyPath, { intent: "generate", strength_days: "2", endurance_days: "1", source: "picks" }, a)).status, 302);
+    assert.ok(!(await readWeek()).some(e => e.day === 7 && e.id === exercise.id));
 
     const session = { submission: randomUUID(), date: "2026-11-20", notes: "First session", "quantity-1-1": "8", "weight-1-1": "12.5", "quantity-1-3": "6" };
     assert.equal((await post(path + "/log", { ...session, date: "2026-02-30" }, a)).status, 400);

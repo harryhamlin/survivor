@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS training_weekly_plan (
   day_of_week smallint NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
   exercise_id text NOT NULL,
   position smallint NOT NULL DEFAULT 0,
+  pinned boolean NOT NULL DEFAULT false,
   PRIMARY KEY (user_id, day_of_week, exercise_id),
   FOREIGN KEY (user_id, exercise_id) REFERENCES training_exercises (author_id, id) ON DELETE CASCADE
 );
@@ -78,6 +79,13 @@ CREATE TABLE IF NOT EXISTS training_weekly_days (
   kind text NOT NULL CHECK (kind IN ('Strength', 'Endurance', 'Rest')),
   PRIMARY KEY (user_id, day_of_week)
 );
+
+-- Before pin tracking, a weekday without a generated day type had only manual entries.
+ALTER TABLE training_weekly_plan ADD COLUMN IF NOT EXISTS pinned boolean;
+UPDATE training_weekly_plan p SET pinned = NOT EXISTS (
+  SELECT 1 FROM training_weekly_days d WHERE d.user_id = p.user_id AND d.day_of_week = p.day_of_week
+) WHERE p.pinned IS NULL;
+ALTER TABLE training_weekly_plan ALTER COLUMN pinned SET DEFAULT false, ALTER COLUMN pinned SET NOT NULL;
 
 -- Starter exercise library for the owner's account. Fixed ids make this a no-op on later deploys.
 INSERT INTO training_exercises (id, author_id, author_name, name, focus, goals, muscle_groups, unit)

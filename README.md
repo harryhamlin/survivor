@@ -248,8 +248,11 @@ At `/workouts/weekly-plan`, assign exercises to a repeating Monday–Sunday plan
 The `training_weekly_plan` table stores one row per user, weekday (Monday = 1,
 Sunday = 7), and exercise. Plan changes are independent of completed sessions.
 
-The weekly plan generator asks for the number of strength and endurance days
-(the rest of the week is rest days), then replaces the whole plan. Strength days
+Pin an exercise to a weekday before generating. You can also pin an exercise
+already on the schedule. Pins repeat until you remove them. A lift reserves its
+matching strength slot for that day, and cardio reserves an endurance day.
+The generator keeps those assignments and fills open slots using your exercise
+source and your strength and endurance day counts. Strength days
 are spaced across the week and each is one full-body workout in this order: push
 (big muscles), push (small muscles), pull (big muscles), pull (small muscles),
 legs, then glutes, core or PT. Big push work includes chest, or shoulders and
