@@ -8,7 +8,7 @@ import {
 } from "../training/data.server";
 import { fullBodySlots, type DayKind, type ExerciseSource } from "../training/generator";
 import { addDays, formatDate, movementFocuses, restChoice, trainingPath, weekdays, weekStart, type Exercise } from "../training/model";
-import { ExerciseAuthor, ExerciseOptions, FormMessage, PageTitle, useLocalToday } from "../training/ui";
+import { ExerciseOptions, FormMessage, PageTitle, useLocalToday } from "../training/ui";
 
 export const meta = () => [{ title: "Weekly plan | Torchsnuffers Training" }];
 
@@ -133,14 +133,14 @@ function DaySwap({ day, busy }: { day: number; busy: boolean }) {
 
 // One planned exercise. Switch opens a picker to replace it in place, or to make the whole day a rest day.
 function PlanEntry({ entry, day, busy, options }: {
-  entry: { exercise_id: string; name: string; author_name: string; pinned: boolean };
+  entry: { exercise_id: string; name: string; pinned: boolean };
   day: number; busy: boolean; options: Exercise[];
 }) {
   const [switching, setSwitching] = useState(false);
   const name = weekdays[day - 1];
   return <li>
     <div className="flex justify-between gap-4">
-      <div className="min-w-0 break-words"><p>{entry.name}{entry.pinned && <span className="tr-muted"> · Pinned</span>}</p><ExerciseAuthor name={entry.author_name}/></div>
+      <p className="min-w-0 break-words">{entry.name}{entry.pinned && <span className="tr-muted"> · Pinned</span>}</p>
       <Form method="post" className="flex flex-wrap items-start justify-end gap-x-3">
         <input type="hidden" name="day" value={day}/>
         <input type="hidden" name="exercise" value={entry.exercise_id}/>
