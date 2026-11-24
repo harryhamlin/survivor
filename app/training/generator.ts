@@ -72,7 +72,9 @@ export function planError(library: Candidate[], req: PlanRequest): string | null
   }
   const ids = new Set(library.map(e => e.id));
   if (new Set(req.picks).size !== req.picks.length || req.picks.some(id => !ids.has(id))) return "Choose exercises from your library.";
-  if (req.source === "picks" && !req.picks.length && !req.assignments.length) return "Choose at least one exercise to include.";
+  if (req.source === "picks" && req.strengthDays + req.enduranceDays > 0 && !req.picks.length && !req.assignments.length) {
+    return "Choose at least one exercise to include.";
+  }
   for (const exercise of req.assignments) {
     const conflict = assignmentConflict(req.assignments, exercise);
     if (conflict) return conflict;

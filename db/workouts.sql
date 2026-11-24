@@ -43,6 +43,11 @@ CREATE TABLE IF NOT EXISTS training_plan_days (
   UNIQUE (user_id, id)
 );
 
+-- An explicitly assigned Rest survives regeneration. Automatically spaced rest days stay flexible.
+CREATE TABLE IF NOT EXISTS training_rest_assignments (
+  day_id bigint PRIMARY KEY REFERENCES training_plan_days (id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS training_plan_exercises (
   user_id integer NOT NULL,
   day_id bigint NOT NULL,

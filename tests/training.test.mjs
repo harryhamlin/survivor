@@ -132,20 +132,22 @@ test("training routes share accounts, isolate private libraries and save perform
     }
     assert.equal((await add(1, exercise.id)).status, 302);
     assert.equal((await add(3, "Bike")).status, 302);
+    const planner = await (await get(weeklyPath, a)).text();
+    assert.match(planner, /<option value="rest">Rest<\/option>/);
+    assert.doesNotMatch(planner, /Assign exercises to weekdays|Rest days \(optional\)/);
+    assert.equal((await add(2, "rest")).status, 302);
+    assert.equal((await add(5, "Bridge")).status, 302);
+    assert.equal((await add(5, "Plank")).status, 302);
     const saved = await readWeek();
     const fill = { intent: "generate", strength_days: "2", endurance_days: "1", source: "random" };
     for (const extra of [{ strength_days: "7" }, { strength_days: "0" }, { endurance_days: "0" },
-      { source: "unknown" }, {source: "picks", pick: "missing"}, {rest_day: "1"}, { rest_day: "8" },
-      { assigned_8: "Row" }, { assigned_5: "missing" }, { assigned_3: "Curl" }]) {
+      { source: "unknown" }, {source: "picks", pick: "missing"}, { strength_days: "6" }]) {
       assert.equal((await plan({...fill, ...extra})).status, 400);
       assert.deepEqual(await readWeek(), saved);
     }
-    const assignments = new URLSearchParams({ ...fill, assigned_5: "Bridge", rest_day: "2" });
-    assignments.append("assigned_5", "Plank");
-    assert.equal((await plan(assignments, b)).status, 400);
+    assert.equal((await plan({ ...fill, source: "picks", pick: "Bridge" }, b)).status, 400);
     for (const source of ["picks", "random", "mix"]) {
-      assignments.set("source", source);
-      assert.equal((await plan(assignments)).status, 302);
+      assert.equal((await plan({ ...fill, source })).status, 302);
       const rows = await readWeek();
       assert.deepEqual(rows.filter(e => e.day === 5 && e.assigned).map(e => e.id), ["Bridge", "Plank"]);
       assert.deepEqual(rows.filter(e => e.day === 3).map(e => e.id), ["Bike"]);
@@ -155,8 +157,18 @@ test("training routes share accounts, isolate private libraries and save perform
       else assert.deepEqual(rows.filter(e => e.day === 5).map(e => e.id),
         ["Other press", "Triceps extension", "Row", "Curl", "Squat", "Bridge", "Plank"]);
     }
-    const beforeSwap = await readWeek();
     const swapDays = (day, other) => plan({ intent: "swap-days", day, with: other });
+    assert.equal((await swapDays(2,4)).status, 302);
+    assert.equal((await plan({ ...fill, strength_days: "5" })).status, 302);
+    assert.equal((await readDays())[3].kind, "Rest");
+    assert.equal((await readDays())[1].kind, "Strength");
+    assert.equal((await plan({ intent: "remove", day: 4, exercise: "rest" })).status, 302);
+    assert.equal((await plan({ ...fill, strength_days: "6" })).status, 302);
+    assert.equal((await readDays())[3].kind, "Strength");
+    assert.equal((await add(2, "rest")).status, 302);
+    assert.ok(!(await readWeek()).some(e => e.day === 2));
+    assert.equal((await plan(fill)).status, 302);
+    const beforeSwap = await readWeek();
     assert.equal((await swapDays(1,1)).status, 400);
     assert.equal((await swapDays(3,5)).status, 302);
     assert.deepEqual((await readWeek()).filter(e => e.day === 3).map(e => e.id), beforeSwap.filter(e => e.day === 5).map(e => e.id));
@@ -263,6 +275,12 @@ test("training routes share accounts, isolate private libraries and save perform
     assert.match(history, /minutes/);
     assert.match(await (await get("/workouts/log", a)).text(), /First session/);
     assert.doesNotMatch(await (await get("/workouts/log", b)).text(), /First session/);
+    assert.equal((await add(7, "rest", b)).status, 302);
+    assert.equal((await plan({ intent: "generate", source: "picks", strength_days: "0", endurance_days: "0" }, b)).status, 302);
+    assert.equal((await plan({ intent: "lock" }, b)).status, 302);
+    const restOnlyLog = await (await get("/workouts/log/" + shift(6 - weekdayOffset), b)).text();
+    assert.match(restOnlyLog, /Rest day/);
+    assert.doesNotMatch(restOnlyLog, /name="quantity-/);
     assert.equal((await post("/workouts", {}, a)).headers.get("Location"), "/workouts");
     assert.match((await get("/workouts/log", a)).headers.get("Location"), /sign-in/);
   } finally {

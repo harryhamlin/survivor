@@ -232,9 +232,8 @@ against each day's workout. Accounts are shared through the existing Postgres co
 each hostname using the same credentials.
 
 Run `npm run db:migrate` before starting the app. The Heroku release phase runs
-the same migration. After the manual reset, `db/workouts.sql` creates four
-tables: `training_exercises`, `training_sessions`, `training_plan_days`, and
-`training_plan_exercises`. It seeds the owner's starter exercise library if
+the same migration. `db/workouts.sql` creates the workout tables and records
+explicit rest days in `training_rest_assignments`. It seeds the owner's starter exercise library if
 that account exists. Re-running the migration preserves existing entries.
 
 Add exercises to your library first. Each takes one movement
@@ -256,9 +255,9 @@ quads that hits glutes or abductors counts as glutes. Random slots draw from
 exercises tagged Strength (PT moves need no tag), favouring ones not yet used
 that week. Each endurance day gets one Cardio exercise. Exercises can come
 from your library at random, only from exercises you choose, or from your
-choices with the remaining slots filled randomly. You can also tick the weekdays you
-want as rest days; strength and endurance days avoid them, and any leftover days
-become rest days placed for spacing.
+choices with the remaining slots filled randomly. Choose **Rest** in the exercise
+picker to clear a date and keep it free during generation. Remove Rest to let
+the generator use that date again, or add an exercise to train that day.
 
 **Swap** trades two dates within the week, including their exercises and day types.
 **Switch** replaces one exercise or makes its date a rest day.

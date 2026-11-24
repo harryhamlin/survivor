@@ -30,7 +30,7 @@ export interface PlannedExercise extends Exercise {
 export function loggingUnit(exercise: Pick<Exercise, "unit" | "focus">) {
   return exercise.focus === "Cardio" && exercise.unit === "reps" ? "minutes" : exercise.unit;
 }
-// The weekly plan's "switch to" value that clears a day instead of naming an exercise.
+// Built-in picker option for assigning a rest day.
 export const restChoice = "rest";
 export interface RecordedMovement {
   // Older session snapshots identify the exercise by name, author and unit.

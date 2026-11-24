@@ -158,6 +158,7 @@ export interface PlanDay {
   date: string;
   kind: DayKind;
   locked: boolean;
+  rest_assigned: boolean;
   exercises: (PlannedExercise & { assigned: boolean })[];
 }
 
@@ -169,6 +170,7 @@ export function workoutName(day: PlanDay) {
 export async function listPlanDays(userId: number, from: string, to: string, lockedOnly = false, db: Pick<PoolClient, "query"> = pool) {
   const { rows } = await db.query<PlanDay>(
     `SELECT d.id, to_char(d.planned_on, 'YYYY-MM-DD') AS date, d.kind, d.locked,
+       EXISTS (SELECT 1 FROM training_rest_assignments r WHERE r.day_id = d.id) AS rest_assigned,
        COALESCE(jsonb_agg(to_jsonb(e) - 'author_id' || jsonb_build_object('position', p.position, 'assigned', p.assigned)
          ORDER BY p.position) FILTER (WHERE e.id IS NOT NULL), '[]') AS exercises
      FROM training_plan_days d
@@ -204,9 +206,12 @@ export async function editCurrentPlan(userId: number, form: FormData) {
       WHERE NOT EXISTS (SELECT 1 FROM training_plan_days WHERE user_id = $1 AND planned_on = $2::date + n)`, [userId, start]);
     if (intent === "generate") return generateWeeklyPlan(client, userId, start, end, form);
     if (intent === "lock") {
-      const planned = await client.query(`SELECT 1 FROM training_plan_days d JOIN training_plan_exercises p ON p.day_id = d.id
-        WHERE d.user_id = $1 AND planned_on BETWEEN $2 AND $3 LIMIT 1`, [userId, start, end]);
-      if (!planned.rowCount) return "Plan at least one exercise before locking in the week.";
+      const planned = await client.query(`SELECT 1 FROM training_plan_days d
+        WHERE d.user_id = $1 AND planned_on BETWEEN $2 AND $3 AND (
+          EXISTS (SELECT 1 FROM training_plan_exercises p WHERE p.day_id = d.id) OR
+          EXISTS (SELECT 1 FROM training_rest_assignments r WHERE r.day_id = d.id)
+        ) LIMIT 1`, [userId, start, end]);
+      if (!planned.rowCount) return "Assign an exercise or Rest before locking in the week.";
       await client.query("UPDATE training_plan_days SET locked = true WHERE user_id = $1 AND planned_on BETWEEN $2 AND $3", [userId, start, end]);
       return;
     }
@@ -230,17 +235,10 @@ async function generateWeeklyPlan(client: PoolClient, userId: number, start: str
   const library = await listExercises(userId, client);
   const days = await listPlanDays(userId, start, end, false, client);
   const assignments: AssignedExercise[] = days.flatMap(d => d.exercises.filter(e => e.assigned).map(e => ({ ...e, day: dayOfWeek(d.date) })));
-  for (const [field, id] of form) {
-    if (!field.startsWith("assigned_")) continue;
-    const day = Number(field.slice("assigned_".length));
-    if (!integer(day, 7)) return "Choose a weekday from Monday to Sunday.";
-    const exercise = library.find(e => e.id === id);
-    if (!exercise) return "Choose an exercise from your library.";
-    if (!assignments.some(e => e.day === day && e.id === id)) assignments.push({ ...exercise, day });
-  }
   const request = {
     strengthDays: Number(value(form, "strength_days")), enduranceDays: Number(value(form, "endurance_days")),
-    source, picks: source === "random" ? [] : form.getAll("pick").map(String), restDays: form.getAll("rest_day").map(Number), assignments,
+    source, picks: source === "random" ? [] : form.getAll("pick").map(String),
+    restDays: days.filter(d => d.rest_assigned).map(d => dayOfWeek(d.date)), assignments,
   };
   const error = planError(library, request);
   if (error) return error;
@@ -268,11 +266,18 @@ async function editPlanExercise(client: PoolClient, userId: number, date: string
   if (!day) return "This day isn't part of a planned week.";
   const intent = value(form, "intent"), exercise = value(form, "exercise");
   if (!(fromLog ? ["swap", "remove", "add"] : ["switch", "remove", "add"]).includes(intent)) return "Choose a workout change.";
+  if (!fromLog && intent === "remove" && exercise === restChoice) {
+    await client.query("DELETE FROM training_rest_assignments WHERE day_id = $1", [day.id]);
+    return;
+  }
   const current = fromLog ? day.exercises.find(e => e.position === Number(value(form, "position"))) : day.exercises.find(e => e.id === exercise);
   if (intent !== "add" && !current) return "Choose an exercise on this workout.";
   const replacement = intent === "switch" ? value(form, "replacement") : exercise;
-  if (intent === "switch" && replacement === restChoice) {
+  if (!fromLog && replacement === restChoice && (intent === "add" || intent === "switch")) {
     await client.query("DELETE FROM training_plan_exercises WHERE day_id = $1", [day.id]);
+    await client.query("UPDATE training_plan_days SET kind = 'Rest' WHERE id = $1", [day.id]);
+    await client.query("INSERT INTO training_rest_assignments (day_id) VALUES ($1) ON CONFLICT DO NOTHING", [day.id]);
+    return;
   } else if (intent === "remove") {
     await client.query("DELETE FROM training_plan_exercises WHERE day_id = $1 AND position = $2", [day.id, current!.position]);
   } else {
@@ -281,6 +286,7 @@ async function editPlanExercise(client: PoolClient, userId: number, date: string
     if (intent !== "add" && current!.id === replacement) return;
     const duplicate = day.exercises.find(e => e.id === replacement);
     if (duplicate && (intent !== "add" || fromLog || duplicate.assigned)) return "That exercise is already planned for this day.";
+    if (day.rest_assigned) await client.query("DELETE FROM training_rest_assignments WHERE day_id = $1", [day.id]);
     if (intent === "add" && !duplicate) {
       await client.query(`INSERT INTO training_plan_exercises (user_id,day_id,exercise_id,position,assigned)
         VALUES ($1,$2,$3,$4,true)`, [userId, day.id, replacement, (day.exercises.at(-1)?.position ?? 0) + 1]);

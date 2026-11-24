@@ -38,11 +38,10 @@ function Generator({ exercises, days, week, busy }: {
   const [strength, setStrength] = useState(() => days.length ? days.filter(d => d.kind === "Strength").length : 3);
   const [endurance, setEndurance] = useState(() => days.length ? days.filter(d => d.kind === "Endurance").length : 2);
   const [source, setSource] = useState<ExerciseSource>("random");
-  const [restDays, setRestDays] = useState<number[]>([]);
-  const rest = 7 - strength - endurance;
-  const chosen = weekdays.filter((_, i) => restDays.includes(i + 1));
-  const restError = rest < 0 ? "Strength and endurance days can't add up to more than 7."
-    : chosen.length > rest ? `You picked ${chosen.length} rest days, but only ${rest} ${rest === 1 ? "day is" : "days are"} left after strength and endurance.`
+  const trainingDays = strength + endurance;
+  const assignedRest = days.filter(d => d.rest_assigned).length;
+  const countError = trainingDays > 7 ? "Strength and endurance days can't add up to more than 7."
+    : trainingDays + assignedRest > 7 ? `You assigned Rest to ${assignedRest} of the 7 days. Lower the training day counts or remove a Rest assignment.`
     : null;
   return <Form method="post" className="tr-form mb-8 border border-primary/40 p-4">
     <h2>Generate this week</h2>
@@ -55,32 +54,9 @@ function Generator({ exercises, days, week, busy }: {
       <label>Endurance days<select name="endurance_days" value={endurance} onChange={e => setEndurance(Number(e.target.value))}>
         {dayCounts.map(n => <option key={n}>{n}</option>)}</select></label>
     </div>
-    <fieldset className="tr-fieldset">
-      <legend>Rest days (optional)</legend>
-      <p className="tr-muted">Pick the weekdays you want off. Any other rest days are placed to space out your training.</p>
-      <div className="tr-choices">{weekdays.map((day, i) => <label key={day}>
-        <input type="checkbox" name="rest_day" value={i + 1} checked={restDays.includes(i + 1)}
-          onChange={e => setRestDays(current => e.target.checked ? [...current, i + 1] : current.filter(d => d !== i + 1))}/>{day}
-      </label>)}</div>
-    </fieldset>
-    <p className={restError ? "tr-error" : "tr-muted"} aria-live="polite">
-      {restError ?? `Rest days: ${rest}` + (chosen.length ? ` · ${chosen.join(", ")}` + (rest > chosen.length ? ` + ${rest - chosen.length} placed for you` : "") : "")}
+    <p className={countError ? "tr-error" : "tr-muted"} aria-live="polite">
+      {countError ?? `Rest days: ${7 - trainingDays}`}
     </p>
-    <fieldset className="tr-fieldset">
-      <legend>Assign exercises to weekdays (optional)</legend>
-      <p className="tr-muted">Open a day to choose exercises for this plan. You can choose several from the same category. Assignments stay on these dates if you generate this week again.</p>
-      {weekdays.map((day, i) => {
-        const assigned = new Set(days.find(d => d.date === addDays(week, i))?.exercises.filter(e => e.assigned).map(e => e.id));
-        return <details key={day}>
-          <summary className="cursor-pointer py-1 font-medium">{day} · {formatDate(addDays(week, i))}</summary>
-          <div className="tr-choices tr-exercise-picks py-2">{exercises.map(exercise => <label key={exercise.id}>
-            <input key={String(assigned.has(exercise.id))} type="checkbox" name={`assigned_${i + 1}`} value={exercise.id}
-              defaultChecked={assigned.has(exercise.id)} disabled={assigned.has(exercise.id)}/>
-            {exercise.name}{assigned.has(exercise.id) && " (assigned)"}
-          </label>)}</div>
-        </details>;
-      })}
-    </fieldset>
     <fieldset className="tr-fieldset">
       <legend>Exercises for open slots</legend>
       <div className="tr-choices tr-stack">{sources.map(([value, label]) => <label key={value}>
@@ -100,7 +76,7 @@ function Generator({ exercises, days, week, busy }: {
         </div> : null;
       })}
     </fieldset>}
-    <button className="tr-button" type="submit" disabled={busy || restError !== null}>Generate week</button>
+    <button className="tr-button" type="submit" disabled={busy || countError !== null}>Generate week</button>
   </Form>;
 }
 
@@ -166,28 +142,31 @@ export default function WeeklyPlan({ loaderData: { exercises, days: loaded, toda
   const week = weekStart(useLocalToday(today));
   const end = addDays(week, 6);
   const days = loaded.filter(d => d.date >= week && d.date <= end);
+  const [selectedExercise, setSelectedExercise] = useState("");
+  const choosingRest = selectedExercise === restChoice;
   const locked = days.some(d => d.locked);
   return <>
     <PageTitle title="Weekly plan"/>
     <p className="tr-intro">{formatDate(week)}–{formatDate(end)}</p>
     <FormMessage error={actionData?.error}/>
-    {exercises.length ? <>
-      <Form method="post" className="tr-form mb-8">
-        <h2>Add an exercise to this week</h2>
-        <input type="hidden" name="week" value={week}/>
-        <input type="hidden" name="intent" value="add"/>
-        <div className="tr-pair">
-          <label>Day<select name="day">{weekdays.map((day, index) =>
-            <option key={day} value={index + 1}>{day} · {formatDate(addDays(week, index))}</option>)}</select></label>
-          <label>Exercise<select name="exercise" required defaultValue="">
-            <option value="" disabled>Choose exercise</option>
-            {exercises.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </select></label>
-        </div>
-        <button className="tr-secondary" type="submit" disabled={busy}>Add exercise</button>
-      </Form>
-      <Generator key={week} exercises={exercises} days={days} week={week} busy={busy}/>
-    </> : <p className="mb-6"><Link className="tr-text-link" to={trainingPath + "/exercises/new?next=weekly-plan"}>Add your first exercise</Link></p>}
+    <Form method="post" className="tr-form mb-8">
+      <h2>Add an exercise to a day this week</h2>
+      <input type="hidden" name="week" value={week}/>
+      <input type="hidden" name="intent" value="add"/>
+      <div className="tr-pair">
+        <label>Day<select name="day">{weekdays.map((day, index) =>
+          <option key={day} value={index + 1}>{day} · {formatDate(addDays(week, index))}</option>)}</select></label>
+        <label>Exercise<select name="exercise" required value={selectedExercise} onChange={e => setSelectedExercise(e.target.value)}>
+          <option value="" disabled>Choose exercise</option>
+          <option value={restChoice}>Rest</option>
+          {exercises.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+        </select></label>
+      </div>
+      {choosingRest && <p className="tr-muted">Rest replaces the exercises planned for this date.</p>}
+      <button className="tr-secondary" type="submit" disabled={busy}>{choosingRest ? "Set rest day" : "Add exercise"}</button>
+    </Form>
+    {exercises.length ? <Generator key={week} exercises={exercises} days={days} week={week} busy={busy}/>
+      : <p className="mb-6"><Link className="tr-text-link" to={trainingPath + "/exercises/new?next=weekly-plan"}>Add your first exercise</Link></p>}
     <div className="tr-list">{weekdays.map((day, index) => {
       const dayNumber = index + 1;
       const date = addDays(week, index);
@@ -201,14 +180,21 @@ export default function WeeklyPlan({ loaderData: { exercises, days: loaded, toda
         {planned.length ? <ul className="mt-2 space-y-2">{planned.map(entry => (
           <PlanEntry week={week} key={entry.id} entry={entry} day={dayNumber} busy={busy}
             options={exercises.filter(e => e.id === entry.id || !planned.some(p => p.id === e.id))}/>
-        ))}</ul> : <p className="tr-muted">{plan?.kind === "Rest" ? "Rest day" : "No exercises planned"}</p>}
+        ))}</ul> : plan?.rest_assigned ? <Form method="post" preventScrollReset className="mt-2 flex items-center justify-between">
+          <span>Rest</span>
+          <input type="hidden" name="week" value={week}/>
+          <input type="hidden" name="day" value={dayNumber}/>
+          <input type="hidden" name="intent" value="remove"/>
+          <input type="hidden" name="exercise" value={restChoice}/>
+          <button className="tr-text-link" disabled={busy} aria-label={"Remove Rest from " + day}>Remove</button>
+        </Form> : <p className="tr-muted">{plan?.kind === "Rest" ? "Rest day" : "No exercises planned"}</p>}
       </section>;
     })}</div>
     {locked ? <Link className="tr-button mt-8" to={trainingPath + "/log"}>Open this week in the training log</Link>
       : <Form method="post" className="tr-form mt-8">
         <input type="hidden" name="intent" value="lock"/>
         <input type="hidden" name="week" value={week}/>
-        <button className="tr-button" disabled={busy || !days.some(d => d.exercises.length)}>Lock in this week</button>
+        <button className="tr-button" disabled={busy || !days.some(d => d.rest_assigned || d.exercises.length)}>Lock in this week</button>
       </Form>}
   </>;
 }
