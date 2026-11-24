@@ -40,7 +40,9 @@ const sources: [ExerciseSource, string][] = [
 ];
 const dayCounts = Array.from({ length: 8 }, (_, n) => n);
 
-function Generator({ exercises, days, busy }: { exercises: Exercise[]; days: { kind: DayKind }[]; busy: boolean }) {
+function Generator({ exercises, days, pins, busy }: {
+  exercises: Exercise[]; days: { kind: DayKind }[]; pins: { day_of_week: number; exercise_id: string }[]; busy: boolean;
+}) {
   const [strength, setStrength] = useState(() => days.length ? days.filter(d => d.kind === "Strength").length : 3);
   const [endurance, setEndurance] = useState(() => days.length ? days.filter(d => d.kind === "Endurance").length : 2);
   const [source, setSource] = useState<ExerciseSource>("random");
@@ -71,6 +73,21 @@ function Generator({ exercises, days, busy }: { exercises: Exercise[]; days: { k
     <p className={restError ? "tr-error" : "tr-muted"} aria-live="polite">
       {restError ?? `Rest days: ${rest}` + (chosen.length ? ` · ${chosen.join(", ")}` + (rest > chosen.length ? ` + ${rest - chosen.length} placed for you` : "") : "")}
     </p>
+    <fieldset className="tr-fieldset">
+      <legend>Assign exercises to weekdays (optional)</legend>
+      <p className="tr-muted">Open a day to choose exercises for this plan. Pin an exercise to keep it there on future plans.</p>
+      {weekdays.map((day, i) => {
+        const pinned = new Set(pins.filter(pin => pin.day_of_week === i + 1).map(pin => pin.exercise_id));
+        return <details key={day}>
+          <summary className="cursor-pointer py-1 font-medium">{day}</summary>
+          <div className="tr-choices tr-exercise-picks py-2">{exercises.map(exercise => <label key={exercise.id}>
+            <input key={String(pinned.has(exercise.id))} type="checkbox" name={`assigned_${i + 1}`} value={exercise.id}
+              defaultChecked={pinned.has(exercise.id)} disabled={pinned.has(exercise.id)}/>
+            {exercise.name}{pinned.has(exercise.id) && " (pinned)"}
+          </label>)}</div>
+        </details>;
+      })}
+    </fieldset>
     <fieldset className="tr-fieldset">
       <legend>Exercises for open slots</legend>
       <div className="tr-choices tr-stack">{sources.map(([value, label]) => <label key={value}>
@@ -135,7 +152,7 @@ function PlanEntry({ entry, day, busy, options }: {
           aria-label={"Remove " + entry.name + " from " + name}>Remove</button>
       </Form>
     </div>
-    {switching && <Form method="post" className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm" onSubmit={() => setSwitching(false)}>
+    {switching && <Form method="post" preventScrollReset className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm" onSubmit={() => setSwitching(false)}>
       <input type="hidden" name="intent" value="switch"/>
       <input type="hidden" name="day" value={day}/>
       <input type="hidden" name="exercise" value={entry.exercise_id}/>
@@ -196,7 +213,7 @@ export default function WeeklyPlan({ loaderData: { exercises, entries, days, loc
           </li>)}
         </ul>}
       </Form>
-      <Generator exercises={exercises} days={days} busy={busy}/>
+      <Generator exercises={exercises} days={days} pins={pins} busy={busy}/>
     </> : <p className="mb-6"><Link className="tr-text-link" to={trainingPath + "/exercises/new?next=weekly-plan"}>Add your first exercise</Link></p>}
     <div className="tr-list">{weekdays.map((day, index) => {
       const dayNumber = index + 1;

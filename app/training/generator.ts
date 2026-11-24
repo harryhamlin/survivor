@@ -10,14 +10,14 @@ export interface PlanRequest {
   enduranceDays: number;
   source: ExerciseSource;
   picks: string[];
-  pins: PinnedExercise[];
+  assignments: AssignedExercise[];
   // Weekdays the user wants kept free. Any other leftover days are placed as rest automatically.
   restDays: number[];
 }
 export interface GeneratedDay { day: number; kind: DayKind; exerciseIds: string[] }
 
 type Candidate = Pick<Exercise, "id" | "focus" | "goals" | "muscle_groups">;
-export type PinnedExercise = Candidate & { day: number };
+export type AssignedExercise = Candidate & { day: number };
 type Rule = (e: Candidate) => boolean;
 
 const has = (e: Candidate, ...groups: string[]) => groups.some(g => e.muscle_groups.includes(g as never));
@@ -43,19 +43,19 @@ const randomFits = (e: Candidate, fits: Rule) => fits(e) && (strong(e) || e.focu
 const inRange = (n: number, min: number, max: number) => Number.isInteger(n) && n >= min && n <= max;
 
 function extraPicks(library: Candidate[], req: PlanRequest) {
-  const pinnedIds = new Set(req.pins.map(e => e.id));
-  return library.filter(e => req.picks.includes(e.id) && !pinnedIds.has(e.id));
+  const assignedIds = new Set(req.assignments.map(e => e.id));
+  return library.filter(e => req.picks.includes(e.id) && !assignedIds.has(e.id));
 }
 
-export function pinConflict(pins: PinnedExercise[], added: PinnedExercise) {
-  const sameDay = pins.filter(e => e.day === added.day);
+export function assignmentConflict(assignments: AssignedExercise[], added: AssignedExercise) {
+  const sameDay = assignments.filter(e => e.day === added.day);
   const day = weekdays[added.day - 1];
   if (sameDay.some(e => isCardio(e) !== isCardio(added))) {
     return `Strength and cardio are both assigned to ${day}. Choose a different day for one of them.`;
   }
   const slot = slotOf(added);
   if (slot >= 0 && sameDay.some(e => e.id !== added.id && slotOf(e) === slot)) {
-    return `${day} has one “${fullBodySlots[slot].label}” slot. Choose a different day or remove the other pin.`;
+    return `${day} has one “${fullBodySlots[slot].label}” slot. Choose a different day or remove the other exercise.`;
   }
   return null;
 }
@@ -70,24 +70,24 @@ export function planError(library: Candidate[], req: PlanRequest): string | null
   if (req.strengthDays + req.enduranceDays + req.restDays.length > 7) {
     return `With ${req.restDays.length} rest days you have ${7 - req.restDays.length} days left for strength and endurance. Lower the day counts or free up a rest day.`;
   }
-  const pinnedRest = req.pins.find(e => req.restDays.includes(e.day));
-  if (pinnedRest) {
-    return `${weekdays[pinnedRest.day - 1]} has a pinned exercise. Remove the pin or train that day.`;
+  const assignedRest = req.assignments.find(e => req.restDays.includes(e.day));
+  if (assignedRest) {
+    return `${weekdays[assignedRest.day - 1]} has an assigned exercise. Remove the assignment or train that day.`;
   }
   const ids = new Set(library.map(e => e.id));
   if (new Set(req.picks).size !== req.picks.length || req.picks.some(id => !ids.has(id))) return "Choose exercises from your library.";
-  if (req.source === "picks" && !req.picks.length && !req.pins.length) return "Choose at least one exercise to include.";
+  if (req.source === "picks" && !req.picks.length && !req.assignments.length) return "Choose at least one exercise to include.";
   // Existing manual plans may predate the one-exercise-per-slot rule.
-  for (const pin of req.pins) {
-    const conflict = pinConflict(req.pins, pin);
+  for (const exercise of req.assignments) {
+    const conflict = assignmentConflict(req.assignments, exercise);
     if (conflict) return conflict;
   }
-  const strength = new Set(req.pins.filter(e => !isCardio(e)).map(e => e.day)).size;
-  const endurance = new Set(req.pins.filter(isCardio).map(e => e.day)).size;
+  const strength = new Set(req.assignments.filter(e => !isCardio(e)).map(e => e.day)).size;
+  const endurance = new Set(req.assignments.filter(isCardio).map(e => e.day)).size;
   if (strength > req.strengthDays || endurance > req.enduranceDays) {
-    return `Your pinned exercises need at least ${strength} strength and ${endurance} endurance days. Increase the day counts or remove a pin.`;
+    return `Your assigned exercises need at least ${strength} strength and ${endurance} endurance days. Increase the day counts or remove an assignment.`;
   }
-  const picked = [...req.pins, ...extraPicks(library, req)];
+  const picked = [...req.assignments, ...extraPicks(library, req)];
   if (picked.some(isCardio) && !req.enduranceDays) return "Add an endurance day for the cardio exercises you chose.";
   for (const [i, slot] of fullBodySlots.entries()) {
     const count = picked.filter(e => !isCardio(e) && slotOf(e) === i).length;
@@ -117,11 +117,11 @@ export function generateWeek(library: Candidate[], req: PlanRequest, random = Ma
   };
 
   const layouts = strengthLayouts.filter(days => days.length === req.strengthDays &&
-    !days.some(day => req.restDays.includes(day)) && req.pins.every(e => days.includes(e.day) === !isCardio(e)));
+    !days.some(day => req.restDays.includes(day)) && req.assignments.every(e => days.includes(e.day) === !isCardio(e)));
   const bestCost = Math.min(...layouts.map(spacingCost));
   const best = layouts.filter(days => spacingCost(days) === bestCost);
   const strengthDays = best[randomInt(best.length)];
-  const cardioDays = new Set(req.pins.filter(isCardio).map(e => e.day));
+  const cardioDays = new Set(req.assignments.filter(isCardio).map(e => e.day));
   const kinds: DayKind[] = weekdays.map((_, i) => strengthDays.includes(i + 1) ? "Strength" : cardioDays.has(i + 1) ? "Endurance" : "Rest");
   const open = kinds.flatMap((kind, i) => kind === "Rest" && !req.restDays.includes(i + 1) ? [i] : []);
   for (const i of shuffle(open).slice(0, req.enduranceDays - cardioDays.size)) kinds[i] = "Endurance";
@@ -138,9 +138,9 @@ export function generateWeek(library: Candidate[], req: PlanRequest, random = Ma
   const strength = kinds.flatMap((kind, i) => kind === "Strength" ? [{ day: i + 1, slots: Array<string | null>(fullBodySlots.length).fill(null) }] : []);
   const endurance = kinds.flatMap((kind, i) => kind === "Endurance" ? [{ day: i + 1, ids: [] as string[] }] : []);
 
-  for (const pin of req.pins) {
-    if (isCardio(pin)) endurance.find(d => d.day === pin.day)!.ids.push(use(pin));
-    else strength.find(d => d.day === pin.day)!.slots[slotOf(pin)] = use(pin);
+  for (const exercise of req.assignments) {
+    if (isCardio(exercise)) endurance.find(d => d.day === exercise.day)!.ids.push(use(exercise));
+    else strength.find(d => d.day === exercise.day)!.slots[slotOf(exercise)] = use(exercise);
   }
   const picked = extraPicks(library, req);
   for (const e of shuffle(picked.filter(e => !isCardio(e)))) {

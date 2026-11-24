@@ -7,7 +7,7 @@ import {
   addDays, dayOfWeek, exerciseUnits, restChoice, isoDate, maxLoggedSets, movementFocuses, muscleGroups, trainingGoals, trainingPath,
   weekdays, weekStart,
 } from "./model";
-import { exerciseSources, generateWeek, pinConflict, planError, type DayKind, type PinnedExercise } from "./generator";
+import { exerciseSources, generateWeek, assignmentConflict, planError, type DayKind, type AssignedExercise } from "./generator";
 import type { Exercise, PlannedExercise, RecordedMovement, TrainingFocus } from "./model";
 
 export async function requireTrainingUser(request: Request) {
@@ -115,7 +115,7 @@ export async function listWeeklyPlan(userId: number, db: Pick<PoolClient, "query
 }
 
 async function pinnedExercises(client: PoolClient, userId: number) {
-  const { rows } = await client.query<PinnedExercise>(
+  const { rows } = await client.query<AssignedExercise>(
     `SELECT p.day_of_week AS day, e.id, e.focus, e.goals, e.muscle_groups FROM training_weekly_plan p
      JOIN training_exercises e ON e.author_id = p.user_id AND e.id = p.exercise_id
      WHERE p.user_id = $1 AND p.pinned ORDER BY p.day_of_week, p.position, e.id`, [userId]);
@@ -151,12 +151,12 @@ export async function updateWeeklyPlan(userId: number, form: FormData) {
       return;
     }
     if (intent !== "add") return "Choose a plan action.";
-    const { rows: [candidate] } = await client.query<PinnedExercise>(
+    const { rows: [candidate] } = await client.query<AssignedExercise>(
       "SELECT $3::int AS day, id, focus, goals, muscle_groups FROM training_exercises WHERE author_id = $1 AND id = $2",
       [userId, exercise, day]);
     if (!candidate) return "Choose an exercise from your library.";
     const pins = await pinnedExercises(client, userId);
-    const conflict = pinConflict(pins, candidate);
+    const conflict = assignmentConflict(pins, candidate);
     if (conflict) return conflict;
     const result = await client.query(
       `INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id, position, pinned)
@@ -209,7 +209,7 @@ export async function switchWeeklyExercise(userId: number, form: FormData) {
       "SELECT position, pinned FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2 AND exercise_id = $3",
       [userId, day, current]);
     if (!entry) return "That exercise is no longer planned for this day.";
-    const { rows: [candidate] } = await client.query<PinnedExercise>(
+    const { rows: [candidate] } = await client.query<AssignedExercise>(
       "SELECT $3::int AS day, id, focus, goals, muscle_groups FROM training_exercises WHERE author_id = $1 AND id = $2",
       [userId, replacement, day]);
     if (!candidate) return "Choose an exercise from your library.";
@@ -218,7 +218,7 @@ export async function switchWeeklyExercise(userId: number, form: FormData) {
       [userId, day, replacement]);
     if (taken.rowCount) return "That exercise is already planned for this day.";
     if (entry.pinned) {
-      const conflict = pinConflict((await pinnedExercises(client, userId)).filter(p => !(p.day === day && p.id === current)), candidate);
+      const conflict = assignmentConflict((await pinnedExercises(client, userId)).filter(p => !(p.day === day && p.id === current)), candidate);
       if (conflict) return conflict;
     }
     await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2 AND exercise_id = $3",
@@ -245,15 +245,26 @@ export async function generateWeeklyPlan(userId: number, form: FormData) {
   const source = exerciseSources.find(option => option === value(form, "source"));
   if (!source) return "Choose where exercises come from.";
   return editWeek(userId, async client => {
+    const library = await listExercises(userId, client);
+    const assignments = await pinnedExercises(client, userId);
+    for (const [field, id] of form) {
+      if (!field.startsWith("assigned_")) continue;
+      const day = Number(field.slice("assigned_".length));
+      if (!integer(day, 7)) return "Choose a weekday from Monday to Sunday.";
+      const exercise = library.find(e => e.id === id);
+      if (!exercise) return "Choose an exercise from your library.";
+      if (!assignments.some(e => e.day === day && e.id === id)) {
+        assignments.push({ ...exercise, day });
+      }
+    }
     const request = {
       strengthDays: Number(value(form, "strength_days")),
       enduranceDays: Number(value(form, "endurance_days")),
       source,
       picks: source === "random" ? [] : form.getAll("pick").map(String),
       restDays: form.getAll("rest_day").map(Number),
-      pins: await pinnedExercises(client, userId),
+      assignments,
     };
-    const library = await listExercises(userId, client);
     const error = planError(library, request);
     if (error) return error;
     const week = generateWeek(library, request);

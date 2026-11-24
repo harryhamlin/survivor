@@ -139,6 +139,27 @@ test("training routes share accounts, isolate private libraries and save perform
        WHERE user_id = $1 ORDER BY day_of_week, position`, [creator.id])).rows;
     const pinned = await readWeek();
     const fill = { ...generate, strength_days: "2", source: "random" };
+    const assignments = new URLSearchParams({ ...fill, strength_days: "3", endurance_days: "2",
+      assigned_1: "Row", assigned_4: "Bike", assigned_5: "Squat" });
+    assignments.append("assigned_1", "Plank");
+    for (const [field, id] of [["assigned_1", "Other press"], ["assigned_2", "Bike"],
+      ["assigned_3", "Curl"], ["assigned_7", "missing"], ["assigned_8", "Row"], ["rest_day", "5"]]) {
+      const invalid = new URLSearchParams(assignments);
+      invalid.append(field, id);
+      assert.equal((await post(weeklyPath, invalid, a)).status, 400);
+      assert.deepEqual(await readWeek(), pinned);
+    }
+    assert.equal((await post(weeklyPath, assignments, b)).status, 400);
+    for (const source of ["random", "mix", "picks"]) {
+      assignments.set("source", source);
+      assert.equal((await post(weeklyPath, assignments, a)).status, 302);
+      const week = await readWeek();
+      for (const [day, id] of [[1, "Plank"], [1, "Row"], [4, "Bike"], [5, "Squat"]]) {
+        assert.ok(week.some(e => e.day === day && e.id === id && !e.pinned));
+      }
+    }
+    assert.equal((await post(weeklyPath, { ...fill, source: "picks" }, a)).status, 302);
+    assert.deepEqual(await readWeek(), pinned);
     assert.equal((await post(weeklyPath, { ...fill, strength_days: "1" }, a)).status, 400);
     assert.equal((await post(weeklyPath, { ...fill, endurance_days: "0" }, a)).status, 400);
     assert.equal((await post(weeklyPath, { ...fill, source: "mix", pick: "Other press" }, a)).status, 400);
