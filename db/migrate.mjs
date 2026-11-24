@@ -31,10 +31,8 @@ const pool = new pg.Pool({
 const TABLES = [
   "training_exercises",
   "training_sessions",
-  "training_weekly_plan",
-  "training_weekly_days",
-  "training_locked_days",
-  "training_locked_exercises",
+  "training_plan_days",
+  "training_plan_exercises",
   "survivor_stats",
   "tribal_episodes",
   "users",

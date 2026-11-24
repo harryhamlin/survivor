@@ -5,9 +5,9 @@ import pool from "../db.server";
 import { getUserId } from "../session.server";
 import {
   addDays, dayOfWeek, exerciseUnits, restChoice, isoDate, maxLoggedSets, movementFocuses, muscleGroups, trainingGoals, trainingPath,
-  weekdays, weekStart,
+  loggingUnit, weekdays, weekStart,
 } from "./model";
-import { exerciseSources, generateWeek, assignmentConflict, planError, type DayKind, type AssignedExercise } from "./generator";
+import { exerciseSources, generateWeek, planError, type DayKind, type AssignedExercise } from "./generator";
 import type { Exercise, PlannedExercise, RecordedMovement, TrainingFocus } from "./model";
 
 export async function requireTrainingUser(request: Request) {
@@ -76,8 +76,20 @@ export async function recordSession(userId: number, plannedOn: string, form: For
   const recorded: RecordedMovement[] = [];
   for (const move of day.exercises) {
     const sets: RecordedMovement["sets"] = [];
+    const cardio = move.focus === "Cardio";
     for (let i = 1; i <= maxLoggedSets; i++) {
       const key = move.position + "-" + i;
+      if (cardio) {
+        const time = value(form, "time-" + key), power = value(form, "watts-" + key);
+        if (value(form, "quantity-" + key) || value(form, "weight-" + key)) return "Reload the workout to log cardio with time and watts.";
+        if (!time && !power) continue;
+        const quantity = Number(time), watts = power ? Number(power) : null;
+        if (!Number.isFinite(quantity) || quantity <= 0 || (watts !== null && (!Number.isFinite(watts) || watts < 0))) {
+          return "Enter a positive time and optional nonnegative watts for " + move.name + ", set " + i + ".";
+        }
+        sets.push({ quantity, watts });
+        continue;
+      }
       const amount = value(form, "quantity-" + key), load = value(form, "weight-" + key);
       if (!amount && !load) continue;
       const quantity = Number(amount), weight = load ? Number(load) : null;
@@ -87,15 +99,35 @@ export async function recordSession(userId: number, plannedOn: string, form: For
       sets.push({ quantity, weight });
     }
     // Sets are keyed by position, so make sure each position still holds the exercise that was on screen.
-    if (sets.length && value(form, "exercise-" + move.position) !== move.id) {
+    const exerciseField = "exercise-" + move.position;
+    if ((sets.length || form.has(exerciseField)) && value(form, exerciseField) !== move.id) {
       return "This workout changed while you were logging. Check your sets and save again.";
     }
-    if (sets.length) recorded.push({ name: move.name, author_name: move.author_name, unit: move.unit, sets });
+    if (sets.length) recorded.push({ exercise_id: move.id, name: move.name, author_name: move.author_name, unit: loggingUnit(move), sets });
   }
   if (!recorded.length) return "Enter at least one completed set.";
   await pool.query(`INSERT INTO training_sessions (user_id, submission_id, workout_name, performed_on, notes, movements)
     VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (user_id, submission_id) DO NOTHING`,
     [userId, token, workoutName(day), date, notes, JSON.stringify(recorded)]);
+}
+
+export async function lastLoggedMovements(userId: number, day: PlanDay): Promise<Record<string, RecordedMovement>> {
+  if (!day.exercises.length) return {};
+  const { rows } = await pool.query<{ id: string; movement: RecordedMovement }>(
+    `SELECT DISTINCT ON (e.id) e.id, m.movement
+     FROM training_sessions s
+     CROSS JOIN LATERAL jsonb_array_elements(s.movements) AS m(movement)
+     JOIN training_exercises e ON e.author_id = s.user_id AND e.id = ANY($3::text[])
+     WHERE s.user_id = $1 AND s.performed_on <= $2 AND (
+       m.movement->>'exercise_id' = e.id OR (
+         NOT (m.movement ? 'exercise_id') AND m.movement->>'name' = e.name
+         AND m.movement->>'unit' = e.unit AND m.movement->>'author_name' = e.author_name
+         AND NOT EXISTS (SELECT 1 FROM training_exercises other
+           WHERE other.author_id = e.author_id AND other.name = e.name AND other.unit = e.unit
+             AND other.author_name = e.author_name AND other.id <> e.id)
+       )
+     ) ORDER BY e.id, s.performed_on DESC, s.id DESC`, [userId, day.date, day.exercises.map(e => e.id)]);
+  return Object.fromEntries(rows.map(row => [row.id, row.movement]));
 }
 
 export async function listSessions(userId: number) {
@@ -105,24 +137,6 @@ export async function listSessions(userId: number) {
   return rows;
 }
 
-export async function listWeeklyPlan(userId: number, db: Pick<PoolClient, "query"> = pool) {
-  const { rows } = await db.query<{ day_of_week: number; exercise_id: string; name: string; author_name: string; pinned: boolean; focus: Exercise["focus"] }>(
-    `SELECT p.day_of_week, p.exercise_id, e.name, e.author_name, e.focus, p.pinned
-     FROM training_weekly_plan p
-     JOIN training_exercises e ON e.author_id = p.user_id AND e.id = p.exercise_id
-     WHERE p.user_id = $1 ORDER BY p.day_of_week, p.position, e.name, e.id`, [userId]);
-  return rows;
-}
-
-async function pinnedExercises(client: PoolClient, userId: number) {
-  const { rows } = await client.query<AssignedExercise>(
-    `SELECT p.day_of_week AS day, e.id, e.focus, e.goals, e.muscle_groups FROM training_weekly_plan p
-     JOIN training_exercises e ON e.author_id = p.user_id AND e.id = p.exercise_id
-     WHERE p.user_id = $1 AND p.pinned ORDER BY p.day_of_week, p.position, e.id`, [userId]);
-  return rows;
-}
-
-// Serialize edits and regeneration so a pin saved while a week is being filled survives either order.
 async function editWeek(userId: number, edit: (client: PoolClient) => Promise<string | void>) {
   const client = await pool.connect();
   try {
@@ -139,244 +153,144 @@ async function editWeek(userId: number, edit: (client: PoolClient) => Promise<st
   }
 }
 
-export async function updateWeeklyPlan(userId: number, form: FormData) {
-  const day = Number(value(form, "day"));
-  const exercise = value(form, "exercise");
-  if (!integer(day, 7) || !exercise) return "Choose a weekday and an exercise.";
-  return editWeek(userId, async client => {
-    const intent = value(form, "intent");
-    if (intent === "remove") {
-      await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2 AND exercise_id = $3",
-        [userId, day, exercise]);
-      return;
-    }
-    if (intent !== "add") return "Choose a plan action.";
-    const { rows: [candidate] } = await client.query<AssignedExercise>(
-      "SELECT $3::int AS day, id, focus, goals, muscle_groups FROM training_exercises WHERE author_id = $1 AND id = $2",
-      [userId, exercise, day]);
-    if (!candidate) return "Choose an exercise from your library.";
-    const pins = await pinnedExercises(client, userId);
-    const conflict = assignmentConflict(pins, candidate);
-    if (conflict) return conflict;
-    const result = await client.query(
-      `INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id, position, pinned)
-       SELECT $1, $2, $3, COALESCE(MAX(position), 0) + 1, true FROM training_weekly_plan
-       WHERE user_id = $1 AND day_of_week = $2
-       ON CONFLICT (user_id, day_of_week, exercise_id) DO UPDATE SET pinned = true WHERE NOT training_weekly_plan.pinned`,
-      [userId, day, exercise]);
-    if (!result.rowCount) return "That exercise is already pinned to this day.";
-  });
+export interface PlanDay {
+  id: string;
+  date: string;
+  kind: DayKind;
+  locked: boolean;
+  exercises: (PlannedExercise & { assigned: boolean })[];
 }
 
-// Trades everything on two weekdays, pins and day types included. Rows are rewritten rather than
-// updated in place because both days can hold the same exercise, which would collide mid-update.
-// (A writable CTE doesn't help: its DELETE and INSERT share one snapshot.)
-export async function swapWeeklyDays(userId: number, form: FormData) {
-  const a = Number(value(form, "day")), b = Number(value(form, "with"));
-  if (!integer(a, 7) || !integer(b, 7) || a === b) return "Choose two different weekdays to swap.";
-  const other = (day: number) => day === a ? b : a;
-  return editWeek(userId, async client => {
-    const days = [userId, a, b];
-    const { rows: entries } = await client.query<{ day_of_week: number; exercise_id: string; position: number; pinned: boolean }>(
-      "SELECT day_of_week, exercise_id, position, pinned FROM training_weekly_plan WHERE user_id = $1 AND day_of_week IN ($2, $3)", days);
-    const { rows: kinds } = await client.query<{ day_of_week: number; kind: DayKind }>(
-      "SELECT day_of_week, kind FROM training_weekly_days WHERE user_id = $1 AND day_of_week IN ($2, $3)", days);
-    await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1 AND day_of_week IN ($2, $3)", days);
-    await client.query("DELETE FROM training_weekly_days WHERE user_id = $1 AND day_of_week IN ($2, $3)", days);
-    await client.query(`INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id, position, pinned)
-      SELECT $1, d, e, p, pin FROM unnest($2::smallint[], $3::text[], $4::smallint[], $5::boolean[]) AS t(d, e, p, pin)`,
-      [userId, entries.map(e => other(e.day_of_week)), entries.map(e => e.exercise_id), entries.map(e => e.position), entries.map(e => e.pinned)]);
-    await client.query(`INSERT INTO training_weekly_days (user_id, day_of_week, kind)
-      SELECT $1, d, k FROM unnest($2::smallint[], $3::text[]) AS t(d, k)`,
-      [userId, kinds.map(k => other(k.day_of_week)), kinds.map(k => k.kind)]);
-  });
-}
-
-// Replaces one planned exercise in place, or turns the whole day into a rest day.
-// A pinned exercise hands its pin to the replacement, so it must fit the same pin rules.
-export async function switchWeeklyExercise(userId: number, form: FormData) {
-  const day = Number(value(form, "day"));
-  const current = value(form, "exercise"), replacement = value(form, "replacement");
-  if (!integer(day, 7) || !current || !replacement) return "Choose an exercise to switch in.";
-  return editWeek(userId, async client => {
-    if (replacement === restChoice) {
-      await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2", [userId, day]);
-      await client.query(`INSERT INTO training_weekly_days (user_id, day_of_week, kind) VALUES ($1, $2, 'Rest')
-        ON CONFLICT (user_id, day_of_week) DO UPDATE SET kind = 'Rest'`, [userId, day]);
-      return;
-    }
-    const { rows: [entry] } = await client.query<{ position: number; pinned: boolean }>(
-      "SELECT position, pinned FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2 AND exercise_id = $3",
-      [userId, day, current]);
-    if (!entry) return "That exercise is no longer planned for this day.";
-    const { rows: [candidate] } = await client.query<AssignedExercise>(
-      "SELECT $3::int AS day, id, focus, goals, muscle_groups FROM training_exercises WHERE author_id = $1 AND id = $2",
-      [userId, replacement, day]);
-    if (!candidate) return "Choose an exercise from your library.";
-    if (replacement === current) return;
-    const taken = await client.query("SELECT 1 FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2 AND exercise_id = $3",
-      [userId, day, replacement]);
-    if (taken.rowCount) return "That exercise is already planned for this day.";
-    if (entry.pinned) {
-      const conflict = assignmentConflict((await pinnedExercises(client, userId)).filter(p => !(p.day === day && p.id === current)), candidate);
-      if (conflict) return conflict;
-    }
-    await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1 AND day_of_week = $2 AND exercise_id = $3",
-      [userId, day, current]);
-    await client.query(`INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id, position, pinned)
-      VALUES ($1, $2, $3, $4, $5)`, [userId, day, replacement, entry.position, entry.pinned]);
-    // Keep a generated day's type in step with what's on it now.
-    await client.query(`UPDATE training_weekly_days SET kind = (
-        SELECT CASE WHEN bool_and(e.focus = 'Cardio') THEN 'Endurance' ELSE 'Strength' END
-        FROM training_weekly_plan p JOIN training_exercises e ON e.author_id = p.user_id AND e.id = p.exercise_id
-        WHERE p.user_id = $1 AND p.day_of_week = $2
-      ) WHERE user_id = $1 AND day_of_week = $2`, [userId, day]);
-  });
-}
-
-export async function listWeeklyDays(userId: number) {
-  const { rows } = await pool.query<{ day_of_week: number; kind: DayKind }>(
-    "SELECT day_of_week, kind FROM training_weekly_days WHERE user_id = $1 ORDER BY day_of_week", [userId]);
-  return rows;
-}
-
-// Replaces the whole week: day types and planned exercises are written together.
-export async function generateWeeklyPlan(userId: number, form: FormData) {
-  const source = exerciseSources.find(option => option === value(form, "source"));
-  if (!source) return "Choose where exercises come from.";
-  return editWeek(userId, async client => {
-    const library = await listExercises(userId, client);
-    const assignments = await pinnedExercises(client, userId);
-    for (const [field, id] of form) {
-      if (!field.startsWith("assigned_")) continue;
-      const day = Number(field.slice("assigned_".length));
-      if (!integer(day, 7)) return "Choose a weekday from Monday to Sunday.";
-      const exercise = library.find(e => e.id === id);
-      if (!exercise) return "Choose an exercise from your library.";
-      if (!assignments.some(e => e.day === day && e.id === id)) {
-        assignments.push({ ...exercise, day });
-      }
-    }
-    const request = {
-      strengthDays: Number(value(form, "strength_days")),
-      enduranceDays: Number(value(form, "endurance_days")),
-      source,
-      picks: source === "random" ? [] : form.getAll("pick").map(String),
-      restDays: form.getAll("rest_day").map(Number),
-      assignments,
-    };
-    const error = planError(library, request);
-    if (error) return error;
-    const week = generateWeek(library, request);
-    const entries = week.flatMap(d => d.exerciseIds.map((id, position) => ({ day: d.day, id, position })));
-    await client.query("DELETE FROM training_weekly_plan WHERE user_id = $1 AND NOT pinned", [userId]);
-    await client.query("DELETE FROM training_weekly_days WHERE user_id = $1", [userId]);
-    await client.query(`INSERT INTO training_weekly_days (user_id, day_of_week, kind)
-      SELECT $1, day, kind FROM unnest($2::smallint[], $3::text[]) AS d(day, kind)`,
-      [userId, week.map(d => d.day), week.map(d => d.kind)]);
-    await client.query(`INSERT INTO training_weekly_plan (user_id, day_of_week, exercise_id, position)
-      SELECT $1, day, id, position FROM unnest($2::smallint[], $3::text[], $4::smallint[]) AS p(day, id, position)
-      ON CONFLICT (user_id, day_of_week, exercise_id) DO UPDATE SET position = EXCLUDED.position`,
-      [userId, entries.map(e => e.day), entries.map(e => e.id), entries.map(e => e.position)]);
-  });
-}
-
-export interface LockedDay { date: string; kind: DayKind; exercises: PlannedExercise[] }
-
-export function workoutName(day: LockedDay) {
+export function workoutName(day: PlanDay) {
   const weekday = weekdays[dayOfWeek(day.date) - 1];
   return weekday + " " + (day.kind === "Rest" ? "workout" : day.kind.toLowerCase());
 }
 
-// Locked days between two dates, inclusive, each with its exercises in order.
-export async function listLockedDays(userId: number, from: string, to: string): Promise<LockedDay[]> {
-  const [{ rows: days }, { rows: exercises }] = await Promise.all([
-    pool.query<{ date: string; kind: DayKind }>(
-      `SELECT to_char(planned_on, 'YYYY-MM-DD') AS date, kind FROM training_locked_days
-       WHERE user_id = $1 AND planned_on BETWEEN $2 AND $3 ORDER BY planned_on`, [userId, from, to]),
-    pool.query<PlannedExercise & { date: string }>(
-      `SELECT to_char(l.planned_on, 'YYYY-MM-DD') AS date, l.position, e.id, e.name, e.focus, e.goals,
-         e.muscle_groups, e.unit, e.author_name
-       FROM training_locked_exercises l
-       JOIN training_exercises e ON e.author_id = l.user_id AND e.id = l.exercise_id
-       WHERE l.user_id = $1 AND l.planned_on BETWEEN $2 AND $3 ORDER BY l.planned_on, l.position`, [userId, from, to]),
-  ]);
-  return days.map(day => ({ ...day, exercises: exercises.filter(e => e.date === day.date).map(({ date: _, ...e }) => e) }));
+export async function listPlanDays(userId: number, from: string, to: string, lockedOnly = false, db: Pick<PoolClient, "query"> = pool) {
+  const { rows } = await db.query<PlanDay>(
+    `SELECT d.id, to_char(d.planned_on, 'YYYY-MM-DD') AS date, d.kind, d.locked,
+       COALESCE(jsonb_agg(to_jsonb(e) - 'author_id' || jsonb_build_object('position', p.position, 'assigned', p.assigned)
+         ORDER BY p.position) FILTER (WHERE e.id IS NOT NULL), '[]') AS exercises
+     FROM training_plan_days d
+     LEFT JOIN training_plan_exercises p ON p.day_id = d.id
+     LEFT JOIN training_exercises e ON e.id = p.exercise_id
+     WHERE d.user_id = $1 AND d.planned_on BETWEEN $2 AND $3 AND (NOT $4 OR d.locked)
+     GROUP BY d.id ORDER BY d.planned_on`, [userId, from, to, lockedOnly]);
+  return rows;
 }
 
 export async function getLockedDay(userId: number, date: string) {
-  const [day] = await listLockedDays(userId, readPlannedDate(date), date);
+  const [day] = await listPlanDays(userId, readPlannedDate(date), date, true);
   if (!day) throw new Response("Workout not found", { status: 404, statusText: "Workout not found" });
   return day;
 }
 
-// Dates a week around the server's day, wide enough to hold the browser's current week in any time zone.
 export function lockWindow() {
   const today = isoDate(new Date());
   return { today, from: addDays(today, -8), to: addDays(today, 8) };
 }
 
-// Copies the repeating plan onto the dated Monday–Sunday that contains the browser's today.
-export async function lockWeek(userId: number, form: FormData) {
-  const today = value(form, "today");
-  const { today: serverToday } = lockWindow();
-  if (!isDate(today) || today < addDays(serverToday, -1) || today > addDays(serverToday, 1)) {
-    return "Reload the page and try again.";
+// Each mutation operates on the local week the user actually saw, including at UTC week boundaries.
+export async function editCurrentPlan(userId: number, form: FormData) {
+  const start = value(form, "week"), today = isoDate(new Date());
+  if (![weekStart(addDays(today, -1)), weekStart(today), weekStart(addDays(today, 1))].includes(start)) {
+    return "Reload the planner to edit the current week.";
   }
-  const start = weekStart(today);
+  const end = addDays(start, 6);
+  const intent = value(form, "intent");
   return editWeek(userId, async client => {
-    const entries = await listWeeklyPlan(userId, client);
-    if (!entries.length) return "Plan at least one exercise before locking in the week.";
-    const { rows: kinds } = await client.query<{ day_of_week: number; kind: DayKind }>(
-      "SELECT day_of_week, kind FROM training_weekly_days WHERE user_id = $1", [userId]);
-    const days = weekdays.map((_, i) => {
-      const planned = entries.filter(e => e.day_of_week === i + 1);
-      const kind: DayKind = !planned.length ? kinds.find(k => k.day_of_week === i + 1)?.kind ?? "Rest"
-        : planned.every(e => e.focus === "Cardio") ? "Endurance" : "Strength";
-      return { date: addDays(start, i), kind, ids: planned.map(e => e.exercise_id) };
-    });
-    const rows = days.flatMap(d => d.ids.map((id, i) => ({ date: d.date, id, position: i + 1 })));
-    await client.query("DELETE FROM training_locked_days WHERE user_id = $1 AND planned_on BETWEEN $2 AND $3",
-      [userId, start, addDays(start, 6)]);
-    await client.query(`INSERT INTO training_locked_days (user_id, planned_on, kind)
-      SELECT $1, d, k FROM unnest($2::date[], $3::text[]) AS t(d, k)`,
-      [userId, days.map(d => d.date), days.map(d => d.kind)]);
-    await client.query(`INSERT INTO training_locked_exercises (user_id, planned_on, position, exercise_id)
-      SELECT $1, d, p, e FROM unnest($2::date[], $3::smallint[], $4::text[]) AS t(d, p, e)`,
-      [userId, rows.map(r => r.date), rows.map(r => r.position), rows.map(r => r.id)]);
+    await client.query(`INSERT INTO training_plan_days (user_id, planned_on, kind)
+      SELECT $1, $2::date + n, 'Rest' FROM generate_series(0,6) AS n
+      WHERE NOT EXISTS (SELECT 1 FROM training_plan_days WHERE user_id = $1 AND planned_on = $2::date + n)`, [userId, start]);
+    if (intent === "generate") return generateWeeklyPlan(client, userId, start, end, form);
+    if (intent === "lock") {
+      const planned = await client.query(`SELECT 1 FROM training_plan_days d JOIN training_plan_exercises p ON p.day_id = d.id
+        WHERE d.user_id = $1 AND planned_on BETWEEN $2 AND $3 LIMIT 1`, [userId, start, end]);
+      if (!planned.rowCount) return "Plan at least one exercise before locking in the week.";
+      await client.query("UPDATE training_plan_days SET locked = true WHERE user_id = $1 AND planned_on BETWEEN $2 AND $3", [userId, start, end]);
+      return;
+    }
+    const day = Number(value(form, "day"));
+    if (!integer(day, 7)) return "Choose a weekday.";
+    const date = addDays(start, day - 1);
+    if (intent === "swap-days") {
+      const other = Number(value(form, "with"));
+      if (!integer(other, 7) || other === day) return "Choose two different weekdays to swap.";
+      await client.query(`UPDATE training_plan_days SET planned_on = CASE WHEN planned_on = $2 THEN $3::date ELSE $2::date END
+        WHERE user_id = $1 AND planned_on IN ($2, $3)`, [userId, date, addDays(start, other - 1)]);
+      return;
+    }
+    return editPlanExercise(client, userId, date, form, false);
   });
 }
 
-// Live changes to one locked day from the training log. The repeating weekly plan is left alone.
-export async function editLockedDay(userId: number, date: string, form: FormData) {
+async function generateWeeklyPlan(client: PoolClient, userId: number, start: string, end: string, form: FormData) {
+  const source = exerciseSources.find(option => option === value(form, "source"));
+  if (!source) return "Choose where exercises come from.";
+  const library = await listExercises(userId, client);
+  const days = await listPlanDays(userId, start, end, false, client);
+  const assignments: AssignedExercise[] = days.flatMap(d => d.exercises.filter(e => e.assigned).map(e => ({ ...e, day: dayOfWeek(d.date) })));
+  for (const [field, id] of form) {
+    if (!field.startsWith("assigned_")) continue;
+    const day = Number(field.slice("assigned_".length));
+    if (!integer(day, 7)) return "Choose a weekday from Monday to Sunday.";
+    const exercise = library.find(e => e.id === id);
+    if (!exercise) return "Choose an exercise from your library.";
+    if (!assignments.some(e => e.day === day && e.id === id)) assignments.push({ ...exercise, day });
+  }
+  const request = {
+    strengthDays: Number(value(form, "strength_days")), enduranceDays: Number(value(form, "endurance_days")),
+    source, picks: source === "random" ? [] : form.getAll("pick").map(String), restDays: form.getAll("rest_day").map(Number), assignments,
+  };
+  const error = planError(library, request);
+  if (error) return error;
+  const week = generateWeek(library, request);
+  const entries = week.flatMap(d => d.exerciseIds.map((id, i) => ({ date: addDays(start, d.day - 1), id, position: i + 1,
+    assigned: assignments.some(a => a.day === d.day && a.id === id) })));
+  await client.query(`DELETE FROM training_plan_exercises p USING training_plan_days d
+    WHERE p.day_id = d.id AND d.user_id = $1 AND d.planned_on BETWEEN $2 AND $3`, [userId, start, end]);
+  await client.query(`UPDATE training_plan_days d SET kind = t.kind FROM unnest($2::date[], $3::text[]) AS t(date,kind)
+    WHERE d.user_id = $1 AND d.planned_on = t.date`, [userId, days.map(d => d.date), week.map(d => d.kind)]);
+  await client.query(`INSERT INTO training_plan_exercises (user_id, day_id, exercise_id, position, assigned)
+    SELECT d.user_id, d.id, t.exercise, t.position, t.assigned
+    FROM unnest($2::date[], $3::text[], $4::int[], $5::boolean[]) AS t(date,exercise,position,assigned)
+    JOIN training_plan_days d ON d.user_id = $1 AND d.planned_on = t.date`,
+    [userId, entries.map(e => e.date), entries.map(e => e.id), entries.map(e => e.position), entries.map(e => e.assigned)]);
+}
+
+export function editLockedDay(userId: number, date: string, form: FormData) {
   readPlannedDate(date);
+  return editWeek(userId, client => editPlanExercise(client, userId, date, form, true));
+}
+
+async function editPlanExercise(client: PoolClient, userId: number, date: string, form: FormData, fromLog: boolean) {
+  const [day] = await listPlanDays(userId, date, date, fromLog, client);
+  if (!day) return "This day isn't part of a planned week.";
   const intent = value(form, "intent"), exercise = value(form, "exercise");
-  const position = Number(value(form, "position"));
-  if (!["swap", "add", "remove"].includes(intent)) return "Choose a workout change.";
-  if (intent !== "add" && !integer(position, 32767)) return "Choose an exercise on this workout.";
-  return editWeek(userId, async client => {
-    const { rows: current } = await client.query<{ position: number; exercise_id: string }>(
-      `SELECT l.position, l.exercise_id FROM training_locked_days d
-       LEFT JOIN training_locked_exercises l USING (user_id, planned_on)
-       WHERE d.user_id = $1 AND d.planned_on = $2`, [userId, date]);
-    if (!current.length) return "This day isn't part of a locked-in week.";
-    if (intent === "remove") {
-      await client.query("DELETE FROM training_locked_exercises WHERE user_id = $1 AND planned_on = $2 AND position = $3",
-        [userId, date, position]);
-      return;
-    }
-    const owned = await client.query("SELECT 1 FROM training_exercises WHERE author_id = $1 AND id = $2", [userId, exercise]);
+  if (!(fromLog ? ["swap", "remove", "add"] : ["switch", "remove", "add"]).includes(intent)) return "Choose a workout change.";
+  const current = fromLog ? day.exercises.find(e => e.position === Number(value(form, "position"))) : day.exercises.find(e => e.id === exercise);
+  if (intent !== "add" && !current) return "Choose an exercise on this workout.";
+  const replacement = intent === "switch" ? value(form, "replacement") : exercise;
+  if (intent === "switch" && replacement === restChoice) {
+    await client.query("DELETE FROM training_plan_exercises WHERE day_id = $1", [day.id]);
+  } else if (intent === "remove") {
+    await client.query("DELETE FROM training_plan_exercises WHERE day_id = $1 AND position = $2", [day.id, current!.position]);
+  } else {
+    const owned = await client.query("SELECT 1 FROM training_exercises WHERE author_id = $1 AND id = $2", [userId, replacement]);
     if (!owned.rowCount) return "Choose an exercise from your library.";
-    if (current.some(e => e.exercise_id === exercise && e.position !== position)) return "That exercise is already in this workout.";
-    if (intent === "add") {
-      await client.query(`INSERT INTO training_locked_exercises (user_id, planned_on, position, exercise_id)
-        SELECT $1, $2, COALESCE(MAX(position), 0) + 1, $3 FROM training_locked_exercises
-        WHERE user_id = $1 AND planned_on = $2`, [userId, date, exercise]);
-      return;
+    if (intent !== "add" && current!.id === replacement) return;
+    const duplicate = day.exercises.find(e => e.id === replacement);
+    if (duplicate && (intent !== "add" || fromLog || duplicate.assigned)) return "That exercise is already planned for this day.";
+    if (intent === "add" && !duplicate) {
+      await client.query(`INSERT INTO training_plan_exercises (user_id,day_id,exercise_id,position,assigned)
+        VALUES ($1,$2,$3,$4,true)`, [userId, day.id, replacement, (day.exercises.at(-1)?.position ?? 0) + 1]);
+    } else {
+      await client.query("UPDATE training_plan_exercises SET exercise_id = $3, assigned = true WHERE day_id = $1 AND position = $2",
+        [day.id, (duplicate ?? current)!.position, replacement]);
     }
-    const swapped = await client.query(
-      "UPDATE training_locked_exercises SET exercise_id = $4 WHERE user_id = $1 AND planned_on = $2 AND position = $3",
-      [userId, date, position, exercise]);
-    if (!swapped.rowCount) return "Choose an exercise on this workout.";
-  });
+  }
+  await client.query(`UPDATE training_plan_days SET kind = (
+    SELECT CASE WHEN count(*) = 0 THEN 'Rest' WHEN bool_and(e.focus = 'Cardio') THEN 'Endurance' ELSE 'Strength' END
+    FROM training_plan_exercises p JOIN training_exercises e ON p.exercise_id = e.id WHERE p.day_id = $1
+  ) WHERE id = $1`, [day.id]);
 }

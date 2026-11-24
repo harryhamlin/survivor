@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS training_exercises (
       'Hip flexors', 'Adductors', 'Abductors'
     ]
   ),
-  unit text NOT NULL CHECK (unit IN ('reps', 'seconds', 'minutes'))
+  unit text NOT NULL CHECK (unit IN ('reps', 'seconds', 'minutes')),
+  CONSTRAINT training_exercises_author_exercise UNIQUE (author_id, id)
 );
 
 -- Capture the performed sets with their names and units so history is a record of that day.
@@ -30,52 +31,29 @@ CREATE TABLE IF NOT EXISTS training_sessions (
   UNIQUE (user_id, submission_id)
 );
 CREATE INDEX IF NOT EXISTS training_sessions_user_date ON training_sessions (user_id, performed_on DESC, id DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS training_exercises_author_exercise ON training_exercises (author_id, id);
 
--- A repeating ISO weekday schedule. The composite FK keeps each exercise in its creator's plan.
-CREATE TABLE IF NOT EXISTS training_weekly_plan (
-  user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  day_of_week smallint NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
-  exercise_id text NOT NULL,
-  position smallint NOT NULL DEFAULT 0,
-  pinned boolean NOT NULL DEFAULT false,
-  PRIMARY KEY (user_id, day_of_week, exercise_id),
-  FOREIGN KEY (user_id, exercise_id) REFERENCES training_exercises (author_id, id) ON DELETE CASCADE
-);
-
--- What each weekday is for. Written by the weekly plan generator; days without a row are unassigned.
-CREATE TABLE IF NOT EXISTS training_weekly_days (
-  user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  day_of_week smallint NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
-  kind text NOT NULL CHECK (kind IN ('Strength', 'Endurance', 'Rest')),
-  PRIMARY KEY (user_id, day_of_week)
-);
-
--- "Lock in this week" copies the repeating plan onto real dates. Edits from the training log change only these rows.
-CREATE TABLE IF NOT EXISTS training_locked_days (
+-- A week is planned on calendar dates. Locking makes its days available in the log.
+CREATE TABLE IF NOT EXISTS training_plan_days (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   planned_on date NOT NULL,
   kind text NOT NULL CHECK (kind IN ('Strength', 'Endurance', 'Rest')),
-  PRIMARY KEY (user_id, planned_on)
+  locked boolean NOT NULL DEFAULT false,
+  UNIQUE (user_id, planned_on) DEFERRABLE INITIALLY IMMEDIATE,
+  UNIQUE (user_id, id)
 );
 
-CREATE TABLE IF NOT EXISTS training_locked_exercises (
+CREATE TABLE IF NOT EXISTS training_plan_exercises (
   user_id integer NOT NULL,
-  planned_on date NOT NULL,
-  position smallint NOT NULL,
+  day_id bigint NOT NULL,
+  position integer NOT NULL CHECK (position > 0),
   exercise_id text NOT NULL,
-  PRIMARY KEY (user_id, planned_on, position),
-  UNIQUE (user_id, planned_on, exercise_id),
-  FOREIGN KEY (user_id, planned_on) REFERENCES training_locked_days (user_id, planned_on) ON DELETE CASCADE,
+  assigned boolean NOT NULL DEFAULT false,
+  PRIMARY KEY (day_id, position),
+  UNIQUE (day_id, exercise_id),
+  FOREIGN KEY (user_id, day_id) REFERENCES training_plan_days (user_id, id) ON DELETE CASCADE,
   FOREIGN KEY (user_id, exercise_id) REFERENCES training_exercises (author_id, id) ON DELETE CASCADE
 );
-
--- Before pin tracking, a weekday without a generated day type had only manual entries.
-ALTER TABLE training_weekly_plan ADD COLUMN IF NOT EXISTS pinned boolean;
-UPDATE training_weekly_plan p SET pinned = NOT EXISTS (
-  SELECT 1 FROM training_weekly_days d WHERE d.user_id = p.user_id AND d.day_of_week = p.day_of_week
-) WHERE p.pinned IS NULL;
-ALTER TABLE training_weekly_plan ALTER COLUMN pinned SET DEFAULT false, ALTER COLUMN pinned SET NOT NULL;
 
 -- Starter exercise library for the owner's account. Fixed ids make this a no-op on later deploys.
 INSERT INTO training_exercises (id, author_id, author_name, name, focus, goals, muscle_groups, unit)

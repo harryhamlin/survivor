@@ -27,14 +27,18 @@ export interface Exercise extends TrainingFocus {
 export interface PlannedExercise extends Exercise {
   position: number;
 }
-export const defaultLoggedSets = 3;
+export function loggingUnit(exercise: Pick<Exercise, "unit" | "focus">) {
+  return exercise.focus === "Cardio" && exercise.unit === "reps" ? "minutes" : exercise.unit;
+}
 // The weekly plan's "switch to" value that clears a day instead of naming an exercise.
 export const restChoice = "rest";
 export interface RecordedMovement {
+  // Older session snapshots identify the exercise by name, author and unit.
+  exercise_id?: string;
   author_name: string;
   name: string;
   unit: Exercise["unit"];
-  sets: { quantity: number; weight: number | null }[];
+  sets: ({ quantity: number; weight: number | null } | { quantity: number; watts: number | null })[];
 }
 
 // Calendar dates are ISO strings (YYYY-MM-DD) handled in UTC so the arithmetic never shifts a day.

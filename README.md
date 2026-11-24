@@ -232,10 +232,10 @@ against each day's workout. Accounts are shared through the existing Postgres co
 each hostname using the same credentials.
 
 Run `npm run db:migrate` before starting the app. The Heroku release phase runs
-the same migration. For the planned reset, the six training tables are
-`training_locked_exercises`, `training_locked_days`, `training_weekly_days`, `training_weekly_plan`, `training_sessions`, and
-`training_exercises`. After the manual reset, `db/workouts.sql` creates empty
-libraries. Re-running the migration preserves entries you have since added.
+the same migration. After the manual reset, `db/workouts.sql` creates four
+tables: `training_exercises`, `training_sessions`, `training_plan_days`, and
+`training_plan_exercises`. It seeds the owner's starter exercise library if
+that account exists. Re-running the migration preserves existing entries.
 
 Add exercises to your library first. Each takes one movement
 focus (push, pull, legs, core, PT), one or more muscle groups, and one or more
@@ -244,16 +244,11 @@ any selected goal. Each exercise stores its signed-in creator and
 their display name at creation. Accounts without a display name are credited
 as “Member” followed by their account ID.
 
-At `/workouts/weekly-plan`, assign exercises to a repeating Monday–Sunday plan.
-The `training_weekly_plan` table stores one row per user, weekday (Monday = 1,
-Sunday = 7), and exercise. Plan changes are independent of completed sessions.
-
-Pin an exercise to a weekday before generating. You can also pin an exercise
-already on the schedule. Pins repeat until you remove them. A lift reserves its
-matching strength slot for that day, and cardio reserves an endurance day.
-The generator keeps those assignments and fills open slots using your exercise
-source and your strength and endurance day counts. Strength days
-are spaced across the week and each is one full-body workout in this order: push
+At `/workouts/weekly-plan`, assign exercises to specific dates in the current
+Monday–Sunday week. Manual assignments stay on those dates when regenerating
+the same week. Each new week starts empty. You can assign several lifts from
+the same category to one strength day.
+Random fill selects one exercise for each empty strength category in this order: push
 (big muscles), push (small muscles), pull (big muscles), pull (small muscles),
 legs, then glutes, core or PT. Big push work includes chest, or shoulders and
 triceps together; big pull work includes lats or upper back; leg work without
@@ -263,22 +258,18 @@ that week. Each endurance day gets one Cardio exercise. Exercises can come
 from your library at random, only from exercises you choose, or from your
 choices with the remaining slots filled randomly. You can also tick the weekdays you
 want as rest days; strength and endurance days avoid them, and any leftover days
-become rest days placed for spacing. `training_weekly_days` stores
-each day's type.
+become rest days placed for spacing.
 
-Each weekday's **Swap** link opens a picker that trades that day's whole contents (type,
-exercises and pins) with another weekday.
-Each planned exercise has a **Switch** link that replaces it in place with
-another library exercise. A pinned exercise passes its pin to the replacement,
-which must fit the same pin rules. The same picker can make the whole day a rest
-day, clearing its exercises and pins.
+**Swap** trades two dates within the week, including their exercises and day types.
+**Switch** replaces one exercise or makes its date a rest day.
+**Lock in this week** sets the dated plan's days to locked, making them
+available in the training log. Both screens edit the same dated plan.
+Completed sessions keep their own snapshots.
 
-Below the schedule, **Lock in this week** copies the plan onto the dated
-Monday–Sunday containing the browser's today (`training_locked_days` and
-`training_locked_exercises`). Locking in again replaces that week. The training
-log at `/workouts/log` lists the locked week; each day opens
-`/workouts/log/YYYY-MM-DD`, where you can swap, add or remove exercises while you
-log. Those edits change only the locked day, not the repeating plan.
+Each exercise starts with one blank set or the sets from its most recent log
+on or before the workout date. Add sets as needed and clear any you skip.
+Cardio sets record time and optional watts. A cardio exercise configured for
+seconds uses seconds. Other cardio exercises use minutes.
 The workout hostname opens `/workouts`, which redirects to the training log.
 
 To activate the subdomain on the existing Heroku app, deploy the changes and run

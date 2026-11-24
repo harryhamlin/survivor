@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/training-history";
-import { listLockedDays, listSessions, lockWindow, requireTrainingUser } from "../training/data.server";
+import { listPlanDays, listSessions, lockWindow, requireTrainingUser } from "../training/data.server";
 import { addDays, dayOfWeek, formatDate, trainingPath, weekdays, weekStart } from "../training/model";
 import { ExerciseAuthor, PageTitle, useLocalToday } from "../training/ui";
 
@@ -8,7 +8,7 @@ export const meta = () => [{ title: "Training log | Torchsnuffers Training" }];
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await requireTrainingUser(request);
   const { today, from, to } = lockWindow();
-  const [sessions, lockedDays] = await Promise.all([listSessions(user), listLockedDays(user, from, to)]);
+  const [sessions, lockedDays] = await Promise.all([listSessions(user), listPlanDays(user, from, to, true)]);
   return { sessions, lockedDays, today };
 }
 const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -43,7 +43,8 @@ export default function History({ loaderData }: Route.ComponentProps) {
         <span>{s.movements.reduce((n, m) => n + m.sets.length, 0)} sets</span></summary>
       <div className="tr-item-body">{s.movements.map((m, i) => <div className="tr-history-move" key={i}><h3>{m.name}</h3>
         <ExerciseAuthor name={m.author_name}/>
-        <ol>{m.sets.map((set, j) => <li key={j}>Set {j + 1} · {set.quantity} {m.unit}{set.weight !== null && " · " + set.weight + " lb"}</li>)}</ol>
+        <ol>{m.sets.map((set, j) => <li key={j}>Set {j + 1} · {set.quantity} {m.unit}
+          {"watts" in set ? set.watts !== null && " · " + set.watts + " W" : set.weight !== null && " · " + set.weight + " lb"}</li>)}</ol>
       </div>)}{s.notes && <p className="tr-notes">{s.notes}</p>}</div>
     </details>)}</div> : <div className="tr-empty"><h2>Your log is empty</h2><p>Pick a day from your locked-in week and log your first set. Your completed sessions will appear here.</p></div>}
   </>;

@@ -53,10 +53,6 @@ export function assignmentConflict(assignments: AssignedExercise[], added: Assig
   if (sameDay.some(e => isCardio(e) !== isCardio(added))) {
     return `Strength and cardio are both assigned to ${day}. Choose a different day for one of them.`;
   }
-  const slot = slotOf(added);
-  if (slot >= 0 && sameDay.some(e => e.id !== added.id && slotOf(e) === slot)) {
-    return `${day} has one “${fullBodySlots[slot].label}” slot. Choose a different day or remove the other exercise.`;
-  }
   return null;
 }
 
@@ -77,7 +73,6 @@ export function planError(library: Candidate[], req: PlanRequest): string | null
   const ids = new Set(library.map(e => e.id));
   if (new Set(req.picks).size !== req.picks.length || req.picks.some(id => !ids.has(id))) return "Choose exercises from your library.";
   if (req.source === "picks" && !req.picks.length && !req.assignments.length) return "Choose at least one exercise to include.";
-  // Existing manual plans may predate the one-exercise-per-slot rule.
   for (const exercise of req.assignments) {
     const conflict = assignmentConflict(req.assignments, exercise);
     if (conflict) return conflict;
@@ -89,13 +84,7 @@ export function planError(library: Candidate[], req: PlanRequest): string | null
   }
   const picked = [...req.assignments, ...extraPicks(library, req)];
   if (picked.some(isCardio) && !req.enduranceDays) return "Add an endurance day for the cardio exercises you chose.";
-  for (const [i, slot] of fullBodySlots.entries()) {
-    const count = picked.filter(e => !isCardio(e) && slotOf(e) === i).length;
-    if (count > req.strengthDays) {
-      return `You chose ${count} “${slot.label}” exercises but each strength day has one of those slots. ` +
-        `Choose at most ${req.strengthDays} or add strength days.`;
-    }
-  }
+  if (picked.some(e => !isCardio(e)) && !req.strengthDays) return "Add a strength day for the strength exercises you chose.";
   return null;
 }
 
@@ -134,19 +123,19 @@ export function generateWeek(library: Candidate[], req: PlanRequest, random = Ma
     return options[randomInt(options.length)];
   };
 
-  // Strength days hold one exercise per template slot; endurance days hold a list of cardio work.
-  const strength = kinds.flatMap((kind, i) => kind === "Strength" ? [{ day: i + 1, slots: Array<string | null>(fullBodySlots.length).fill(null) }] : []);
+  // Manual choices can share a slot. Random fill draws once for each empty slot.
+  const strength = strengthDays.map(day => ({ day, slots: fullBodySlots.map((): string[] => []) }));
   const endurance = kinds.flatMap((kind, i) => kind === "Endurance" ? [{ day: i + 1, ids: [] as string[] }] : []);
 
   for (const exercise of req.assignments) {
     if (isCardio(exercise)) endurance.find(d => d.day === exercise.day)!.ids.push(use(exercise));
-    else strength.find(d => d.day === exercise.day)!.slots[slotOf(exercise)] = use(exercise);
+    else strength.find(d => d.day === exercise.day)!.slots[slotOf(exercise)].push(use(exercise));
   }
   const picked = extraPicks(library, req);
   for (const e of shuffle(picked.filter(e => !isCardio(e)))) {
     const slot = slotOf(e);
-    const day = shuffle(strength).find(d => d.slots[slot] === null)!;
-    day.slots[slot] = use(e);
+    const day = shuffle(strength).reduce((a, b) => a.slots[slot].length <= b.slots[slot].length ? a : b);
+    day.slots[slot].push(use(e));
   }
   for (const e of shuffle(picked.filter(isCardio))) {
     const day = endurance.reduce((a, b) => a.ids.length <= b.ids.length ? a : b);
@@ -156,10 +145,10 @@ export function generateWeek(library: Candidate[], req: PlanRequest, random = Ma
   if (req.source !== "picks") {
     for (const day of strength) {
       fullBodySlots.forEach((slot, i) => {
-        if (day.slots[i] !== null) return;
-        const pools = shuffle(slot.pools.map(fits => library.filter(e => randomFits(e, fits) && !day.slots.includes(e.id))))
+        if (day.slots[i].length) return;
+        const pools = shuffle(slot.pools.map(fits => library.filter(e => randomFits(e, fits))))
           .filter(pool => pool.length);
-        if (pools.length) day.slots[i] = use(leastUsed(pools[0]));
+        if (pools.length) day.slots[i].push(use(leastUsed(pools[0])));
       });
     }
     const cardio = library.filter(isCardio);
@@ -169,7 +158,7 @@ export function generateWeek(library: Candidate[], req: PlanRequest, random = Ma
   return kinds.map((kind, i) => ({
     day: i + 1,
     kind,
-    exerciseIds: kind === "Strength" ? strength.find(d => d.day === i + 1)!.slots.filter(id => id !== null)
+    exerciseIds: kind === "Strength" ? strength.find(d => d.day === i + 1)!.slots.flat()
       : kind === "Endurance" ? endurance.find(d => d.day === i + 1)!.ids : [],
   }));
 }
