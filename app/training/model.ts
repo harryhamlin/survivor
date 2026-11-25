@@ -30,6 +30,12 @@ export interface PlannedExercise extends Exercise {
 export function loggingUnit(exercise: Pick<Exercise, "unit" | "focus">) {
   return exercise.focus === "Cardio" && exercise.unit === "reps" ? "minutes" : exercise.unit;
 }
+export function logExercise(exercise: Exercise) {
+  return { id: exercise.id, name: exercise.name, author_name: exercise.author_name,
+    unit: loggingUnit(exercise), cardio: exercise.focus === "Cardio" };
+}
+export type LogExercise = ReturnType<typeof logExercise>;
+export type LogRow = LogExercise & { position: number };
 // Built-in picker option for assigning a rest day.
 export const restChoice = "rest";
 export interface RecordedMovement {

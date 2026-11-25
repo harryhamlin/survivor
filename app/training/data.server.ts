@@ -5,10 +5,10 @@ import pool from "../db.server";
 import { getUserId } from "../session.server";
 import {
   addDays, dayOfWeek, exerciseUnits, restChoice, isoDate, maxLoggedSets, movementFocuses, muscleGroups, trainingGoals, trainingPath,
-  loggingUnit, weekdays, weekStart,
+  logExercise, weekdays, weekStart,
 } from "./model";
 import { exerciseSources, generateWeek, planError, type DayKind, type AssignedExercise } from "./generator";
-import type { Exercise, PlannedExercise, RecordedMovement, TrainingFocus } from "./model";
+import type { Exercise, LogRow, PlannedExercise, RecordedMovement, TrainingFocus } from "./model";
 
 export async function requireTrainingUser(request: Request) {
   const userId = await getUserId(request);
@@ -68,15 +68,52 @@ export function readPlannedDate(date: string) {
   return date;
 }
 
-export async function recordSession(userId: number, plannedOn: string, form: FormData) {
-  const day = await getLockedDay(userId, plannedOn);
-  const date = value(form, "date"), notes = value(form, "notes"), token = value(form, "submission");
-  if (!isDate(date)) return "Enter a valid training date.";
-  if (notes.length > 1000 || !/^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i.test(token)) return "Check your notes and reload the form if needed.";
+interface DaySession {
+  name: string;
+  date: string;
+  notes: string;
+  movements: RecordedMovement[];
+  submission_id: string;
+}
+
+async function daySession(userId: number, date: string, db: Pick<PoolClient, "query">) {
+  const { rows } = await db.query<DaySession>(
+    `SELECT s.submission_id, s.workout_name AS name, to_char(s.performed_on, 'YYYY-MM-DD') AS date, s.notes, s.movements
+     FROM training_session_days l JOIN training_sessions s USING (user_id, submission_id)
+     WHERE l.user_id = $1 AND l.planned_on = $2`, [userId, date]);
+  return rows[0];
+}
+
+function sessionRows(day: PlanDay, library: Exercise[], saved?: DaySession) {
+  const planned = day.exercises.map(e => ({ ...logExercise(e), position: e.position }));
+  const previous: Record<string, RecordedMovement> = {};
+  if (!saved) return { rows: planned, previous };
+
+  const rows = saved.movements.map((m, i) => {
+    const matches = m.exercise_id ? [] : library.filter(e => e.name === m.name && e.author_name === m.author_name && e.unit === m.unit);
+    const id = m.exercise_id ?? (matches.length === 1 ? matches[0].id : `snapshot-${i}`);
+    previous[id] = m;
+    return { id, name: m.name, author_name: m.author_name, unit: m.unit, cardio: m.sets.some(set => "watts" in set), position: i + 1 };
+  });
+  for (const row of planned) {
+    if (!previous[row.id]) rows.push({ ...row, position: rows.length + 1 });
+  }
+  return { rows, previous };
+}
+
+export async function loadSessionForm(userId: number, date: string) {
+  const [day, exercises, saved] = await Promise.all([getLockedDay(userId, date), listExercises(userId), daySession(userId, date, pool)]);
+  const { rows, previous } = sessionRows(day, exercises, saved);
+  return { day: { date: day.date, kind: day.kind }, exercises, rows, name: saved?.name ?? workoutName(day),
+    saved: saved ? { date: saved.date, notes: saved.notes } : null,
+    previous: saved ? previous : await lastLoggedMovements(userId, day) };
+}
+
+function readRecordedSets(rows: LogRow[], form: FormData, previous: Record<string, RecordedMovement>) {
   const recorded: RecordedMovement[] = [];
-  for (const move of day.exercises) {
+  for (const move of rows) {
     const sets: RecordedMovement["sets"] = [];
-    const cardio = move.focus === "Cardio";
+    const cardio = move.cardio;
     for (let i = 1; i <= maxLoggedSets; i++) {
       const key = move.position + "-" + i;
       if (cardio) {
@@ -103,12 +140,52 @@ export async function recordSession(userId: number, plannedOn: string, form: For
     if ((sets.length || form.has(exerciseField)) && value(form, exerciseField) !== move.id) {
       return "This workout changed while you were logging. Check your sets and save again.";
     }
-    if (sets.length) recorded.push({ exercise_id: move.id, name: move.name, author_name: move.author_name, unit: loggingUnit(move), sets });
+    if (sets.length) recorded.push({ ...(previous[move.id] ?? { exercise_id: move.id, name: move.name, author_name: move.author_name, unit: move.unit }), sets });
   }
-  if (!recorded.length) return "Enter at least one completed set.";
-  await pool.query(`INSERT INTO training_sessions (user_id, submission_id, workout_name, performed_on, notes, movements)
-    VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (user_id, submission_id) DO NOTHING`,
-    [userId, token, workoutName(day), date, notes, JSON.stringify(recorded)]);
+  return recorded;
+}
+
+export async function recordSession(userId: number, plannedOn: string, form: FormData) {
+  return editWeek(userId, async client => {
+    const day = await getLockedDay(userId, plannedOn, client);
+    const date = value(form, "date"), notes = value(form, "notes");
+    if (!isDate(date)) return "Enter a valid training date.";
+    if (notes.length > 1000) return "Keep session notes to 1000 characters or fewer.";
+    const saved = await daySession(userId, plannedOn, client);
+    // A retry of the first save may arrive after an edit. Keep the saved edit.
+    if (saved && form.get("intent") === "record") return;
+    if (!saved && form.get("intent") === "update") return "Reload this workout before saving.";
+    const library = saved ? await listExercises(userId, client) : [];
+    const layout = sessionRows(day, library, saved);
+    let rows = layout.rows;
+    if (saved) {
+      // Updates edit the original snapshot, with optional swaps and additions from the user's library.
+      const options = new Map([...library.map(logExercise), ...rows].map(e => [e.id, e]));
+      const selected = new Set<string>();
+      rows = [];
+      for (const [field, id] of form) {
+        const match = /^exercise-([1-9]\d*)$/.exec(field);
+        if (!match) continue;
+        const position = Number(match[1]);
+        const move = options.get(String(id));
+        if (!move || selected.has(move.id) || !Number.isSafeInteger(position)) return "Choose each exercise once.";
+        selected.add(move.id);
+        rows.push({ ...move, position });
+      }
+    }
+    const recorded = readRecordedSets(rows, form, layout.previous);
+    if (typeof recorded === "string") return recorded;
+    if (!recorded.length) return "Enter at least one completed set.";
+    if (saved) {
+      await client.query(`UPDATE training_sessions SET performed_on = $3, notes = $4, movements = $5
+        WHERE user_id = $1 AND submission_id = $2`, [userId, saved.submission_id, date, notes, JSON.stringify(recorded)]);
+    } else {
+      const token = randomUUID();
+      await client.query(`INSERT INTO training_sessions (user_id, submission_id, workout_name, performed_on, notes, movements)
+        VALUES ($1,$2,$3,$4,$5,$6)`, [userId, token, workoutName(day), date, notes, JSON.stringify(recorded)]);
+      await client.query("INSERT INTO training_session_days (user_id, planned_on, submission_id) VALUES ($1,$2,$3)", [userId, plannedOn, token]);
+    }
+  });
 }
 
 export async function lastLoggedMovements(userId: number, day: PlanDay): Promise<Record<string, RecordedMovement>> {
@@ -131,9 +208,11 @@ export async function lastLoggedMovements(userId: number, day: PlanDay): Promise
 }
 
 export async function listSessions(userId: number) {
-  const { rows } = await pool.query<{ id: string; name: string; date: string; notes: string; movements: RecordedMovement[] }>(
-    `SELECT id, workout_name AS name, to_char(performed_on, 'YYYY-MM-DD') AS date, notes, movements
-     FROM training_sessions WHERE user_id = $1 ORDER BY performed_on DESC, id DESC`, [userId]);
+  const { rows } = await pool.query<{ id: string; name: string; date: string; notes: string; movements: RecordedMovement[]; planned_on: string | null }>(
+    `SELECT s.id, s.workout_name AS name, to_char(s.performed_on, 'YYYY-MM-DD') AS date, s.notes, s.movements,
+       to_char(l.planned_on, 'YYYY-MM-DD') AS planned_on
+     FROM training_sessions s LEFT JOIN training_session_days l USING (user_id, submission_id)
+     WHERE s.user_id = $1 ORDER BY s.performed_on DESC, s.id DESC`, [userId]);
   return rows;
 }
 
@@ -181,8 +260,8 @@ export async function listPlanDays(userId: number, from: string, to: string, loc
   return rows;
 }
 
-export async function getLockedDay(userId: number, date: string) {
-  const [day] = await listPlanDays(userId, readPlannedDate(date), date, true);
+export async function getLockedDay(userId: number, date: string, db: Pick<PoolClient, "query"> = pool) {
+  const [day] = await listPlanDays(userId, readPlannedDate(date), date, true, db);
   if (!day) throw new Response("Workout not found", { status: 404, statusText: "Workout not found" });
   return day;
 }

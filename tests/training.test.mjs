@@ -235,9 +235,9 @@ test("training routes share accounts, isolate private libraries and save perform
     assert.equal((await post(dayPath, { ...session, date: "2026-02-30" }, a)).status, 400);
     assert.equal((await post(dayPath, { ...session, ["exercise-" + p]: day.id }, a)).status, 400);
     assert.equal((await post(dayPath, session, b)).status, 404);
-    const saves = await Promise.all([post(dayPath, session, a), post(dayPath, session, a)]);
+    const saves = await Promise.all([post(dayPath, session, a), post(dayPath, { ...session, submission: randomUUID() }, a)]);
     assert.ok(saves.every(r => r.headers.get("Location") === "/workouts/log"));
-    const { rows: sessions } = await pool.query("SELECT workout_name, movements FROM training_sessions");
+    const { rows: sessions } = await pool.query("SELECT id, workout_name, movements FROM training_sessions");
     assert.equal(sessions.length, 1);
     assert.match(sessions[0].workout_name, /^\w+day strength$/);
     assert.deepEqual(sessions[0].movements, [{ exercise_id: "Swap lift", name: "Swap lift", author_name: "Alex", unit: "reps", sets: [{ quantity: 8, weight: 12.5 }, { quantity: 6, weight: null }] }]);
@@ -250,6 +250,32 @@ test("training routes share accounts, isolate private libraries and save perform
     assert.equal(repeat.get(`quantity-${p}-2`), "6");
     assert.equal(repeat.get(`weight-${p}-2`), "");
     assert.ok(!repeat.has(`quantity-${p}-3`));
+
+    const editPage = await (await get(dayPath, a)).text();
+    assert.match(editPage, />Update log</);
+    assert.match(editPage, /First session<\/textarea>/);
+    assert.equal(repeat.get("date"), session.date);
+    assert.equal(repeat.get("intent"), "update");
+    assert.match(await (await get("/workouts/log", a)).text(), /Update log for Monday/);
+    // Plan edits after logging must not lose the saved movement or prefill skipped exercises.
+    assert.equal((await post(dayPath, { intent: "remove", position: String(p) }, a)).status, 200);
+    const updateFields = await fields(dayPath);
+    assert.equal(updateFields.get("exercise-1"), "Swap lift");
+    assert.equal(updateFields.get("quantity-1-1"), "8");
+    assert.ok(!updateFields.get("quantity-2-1"));
+    const update = { intent: "update", date: shift(-2), notes: "Corrected session",
+      "exercise-1": "Swap lift", "quantity-1-1": "10", "weight-1-1": "15" };
+    assert.equal((await post(dayPath, { ...update, "quantity-1-1": "0" }, a)).status, 400);
+    assert.equal((await post(dayPath, update, b)).status, 404);
+    assert.equal((await post(dayPath, update, a)).headers.get("Location"), "/workouts/log");
+    // An old first-save request must not recreate the session or undo a later edit.
+    assert.equal((await post(dayPath, session, a)).status, 302);
+    const {rows: updated} = await pool.query("SELECT id, notes, movements FROM training_sessions WHERE user_id = $1", [creator.id]);
+    assert.equal(updated.length, 1);
+    assert.equal(updated[0].id, sessions[0].id);
+    assert.equal(updated[0].notes, "Corrected session");
+    assert.deepEqual(updated[0].movements[0].sets, [{quantity: 10, weight: 15}]);
+    assert.equal((await fields(dayPath)).get("date"), update.date);
 
     const bike = locked.find(e => e.id === "Bike");
     const bikePath = "/workouts/log/" + bike.date;
@@ -269,18 +295,32 @@ test("training routes share accounts, isolate private libraries and save perform
     assert.equal(bikeHistory.get("watts-" + first), "180");
     assert.equal(bikeHistory.get("time-" + second), "5");
     assert.equal(bikeHistory.get("watts-" + second), "");
+    const powerUpdate = {...cardio, intent: "update", ["watts-" + first]: "185"};
+    assert.equal((await post(bikePath, powerUpdate, a)).status, 302);
+    assert.equal((await fields(bikePath)).get("watts-" + first), "185");
     const history = await (await get("/workouts/log", a)).text();
-    assert.match(history, /180 W/);
-    assert.match(history, /12.5 lb/);
+    assert.match(history, /185 W/);
+    assert.match(history, /15 lb/);
     assert.match(history, /minutes/);
-    assert.match(await (await get("/workouts/log", a)).text(), /First session/);
-    assert.doesNotMatch(await (await get("/workouts/log", b)).text(), /First session/);
+    assert.match(history, /Corrected session/);
+    assert.doesNotMatch(await (await get("/workouts/log", b)).text(), /Corrected session/);
     assert.equal((await add(7, "rest", b)).status, 302);
     assert.equal((await plan({ intent: "generate", source: "picks", strength_days: "0", endurance_days: "0" }, b)).status, 302);
     assert.equal((await plan({ intent: "lock" }, b)).status, 302);
     const restOnlyLog = await (await get("/workouts/log/" + shift(6 - weekdayOffset), b)).text();
     assert.match(restOnlyLog, /Rest day/);
     assert.doesNotMatch(restOnlyLog, /name="quantity-/);
+    // Adopt the latest same-day legacy entry on upgrade without removing earlier history.
+    for (const notes of ["Older Friday entry", "Latest Friday entry"]) {
+      await pool.query(`INSERT INTO training_sessions (user_id, submission_id, workout_name, performed_on, notes, movements)
+        VALUES ($1,$2,'Friday strength',$3,$4,$5)`, [creator.id, randomUUID(), pastFriday, notes, JSON.stringify(sessions[0].movements)]);
+    }
+    await pool.query(migration);
+    await pool.query(migration);
+    const oldPage = await (await get("/workouts/log/" + pastFriday, a)).text();
+    assert.match(oldPage, /Latest Friday entry<\/textarea>/);
+    assert.match(oldPage, />Update log</);
+    assert.equal((await pool.query("SELECT id FROM training_sessions WHERE user_id = $1 AND performed_on = $2 AND workout_name = 'Friday strength'", [creator.id, pastFriday])).rowCount, 2);
     assert.equal((await post("/workouts", {}, a)).headers.get("Location"), "/workouts");
     assert.match((await get("/workouts/log", a)).headers.get("Location"), /sign-in/);
   } finally {

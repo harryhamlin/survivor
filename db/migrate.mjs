@@ -31,6 +31,7 @@ const pool = new pg.Pool({
 const TABLES = [
   "training_exercises",
   "training_sessions",
+  "training_session_days",
   "training_plan_days",
   "training_plan_exercises",
   "training_rest_assignments",

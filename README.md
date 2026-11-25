@@ -263,7 +263,9 @@ the generator use that date again, or add an exercise to train that day.
 **Switch** replaces one exercise or makes its date a rest day.
 **Lock in this week** sets the dated plan's days to locked, making them
 available in the training log. Both screens edit the same dated plan.
-Completed sessions keep their own snapshots.
+Each planned date has one log per account. After **Save session**, use **Update log**
+to edit the saved sets, exercises, training date, or notes. The log keeps its
+original planned date and exercise snapshot when the weekly plan changes.
 
 Each exercise starts with one blank set or the sets from its most recent log
 on or before the workout date. Add sets as needed and clear any you skip.

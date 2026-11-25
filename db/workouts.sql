@@ -43,6 +43,27 @@ CREATE TABLE IF NOT EXISTS training_plan_days (
   UNIQUE (user_id, id)
 );
 
+-- Keep the planned date stable when the performed date or the week's exercise order changes.
+CREATE TABLE IF NOT EXISTS training_session_days (
+  user_id integer NOT NULL,
+  planned_on date NOT NULL,
+  submission_id uuid NOT NULL,
+  PRIMARY KEY (user_id, planned_on),
+  UNIQUE (user_id, submission_id),
+  FOREIGN KEY (user_id, submission_id) REFERENCES training_sessions (user_id, submission_id) ON DELETE CASCADE
+);
+
+-- Older logs only recorded the performed date and the planned weekday in the workout name.
+-- Link the latest same-day match, preserving all historical sessions.
+INSERT INTO training_session_days (user_id, planned_on, submission_id)
+SELECT DISTINCT ON (s.user_id, s.performed_on) s.user_id, s.performed_on, s.submission_id
+FROM training_sessions s
+JOIN training_plan_days d ON d.user_id = s.user_id AND d.planned_on = s.performed_on AND d.locked
+WHERE split_part(s.workout_name, ' ', 1) = (ARRAY['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'])[extract(isodow FROM d.planned_on)::int]
+  AND NOT EXISTS (SELECT 1 FROM training_session_days l WHERE l.user_id = s.user_id AND l.submission_id = s.submission_id)
+ORDER BY s.user_id, s.performed_on, s.id DESC
+ON CONFLICT DO NOTHING;
+
 -- An explicitly assigned Rest survives regeneration. Automatically spaced rest days stay flexible.
 CREATE TABLE IF NOT EXISTS training_rest_assignments (
   day_id bigint PRIMARY KEY REFERENCES training_plan_days (id) ON DELETE CASCADE

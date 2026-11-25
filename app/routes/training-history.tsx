@@ -21,14 +21,14 @@ function ThisWeek({ lockedDays, sessions, today }: Route.ComponentProps["loaderD
     <p>Build your <Link className="tr-text-link" to={trainingPath + "/weekly-plan"}>weekly plan</Link> and lock in this week to log its workouts here.</p></div>;
   return <section className="mb-8"><h2 className="mb-2 text-lg font-semibold">Week of {formatDate(start)}</h2>
     <ul className="tr-list">{week.map(d => {
-      const logged = sessions.filter(s => s.date === d.date).length;
+      const logged = sessions.some(s => s.planned_on === d.date);
       const label = weekdays[dayOfWeek(d.date) - 1];
       return <li key={d.date} className={"tr-plan" + (d.date === localToday ? " bg-primary/10" : "")}>
         <div><h3>{label} <span className="tr-muted font-normal">· {formatDate(d.date)}{d.date === localToday && " · Today"}</span></h3>
           <p className="tr-muted">{d.exercises.length ? d.kind + " · " + d.exercises.map(e => e.name).join(", ") : d.kind === "Rest" ? "Rest day" : d.kind + " · No exercises"}</p>
-          {logged > 0 && <p className="tr-muted">Logged{logged > 1 && " × " + logged}</p>}</div>
+        </div>
         <Link className={d.exercises.length || d.date === localToday ? "tr-button self-center" : "tr-text-link self-center"}
-          to={trainingPath + "/log/" + d.date} aria-label={"Log " + label + " workout"}>Log</Link>
+          to={trainingPath + "/log/" + d.date} aria-label={logged ? "Update log for " + label : "Log " + label + " workout"}>{logged ? "Update log" : "Log"}</Link>
       </li>;
     })}</ul></section>;
 }
@@ -45,7 +45,9 @@ export default function History({ loaderData }: Route.ComponentProps) {
         <ExerciseAuthor name={m.author_name}/>
         <ol>{m.sets.map((set, j) => <li key={j}>Set {j + 1} · {set.quantity} {m.unit}
           {"watts" in set ? set.watts !== null && " · " + set.watts + " W" : set.weight !== null && " · " + set.weight + " lb"}</li>)}</ol>
-      </div>)}{s.notes && <p className="tr-notes">{s.notes}</p>}</div>
+      </div>)}{s.notes && <p className="tr-notes">{s.notes}</p>}
+        {s.planned_on && <Link className="tr-text-link" to={trainingPath + "/log/" + s.planned_on}>Update log</Link>}
+      </div>
     </details>)}</div> : <div className="tr-empty"><h2>Your log is empty</h2><p>Pick a day from your locked-in week and log your first set. Your completed sessions will appear here.</p></div>}
   </>;
 }
