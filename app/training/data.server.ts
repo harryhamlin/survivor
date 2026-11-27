@@ -79,7 +79,7 @@ interface DaySession {
 async function daySession(userId: number, date: string, db: Pick<PoolClient, "query">) {
   const { rows } = await db.query<DaySession>(
     `SELECT s.submission_id, s.workout_name AS name, to_char(s.performed_on, 'YYYY-MM-DD') AS date, s.notes, s.movements
-     FROM training_session_days l JOIN training_sessions s USING (user_id, submission_id)
+     FROM training_resolved_session_days l JOIN training_sessions s USING (user_id, submission_id)
      WHERE l.user_id = $1 AND l.planned_on = $2`, [userId, date]);
   return rows[0];
 }
@@ -177,6 +177,9 @@ export async function recordSession(userId: number, plannedOn: string, form: For
     if (typeof recorded === "string") return recorded;
     if (!recorded.length) return "Enter at least one completed set.";
     if (saved) {
+      // Anchor a legacy match before an edit can change its performed date.
+      await client.query(`INSERT INTO training_session_days (user_id, planned_on, submission_id)
+        VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [userId, plannedOn, saved.submission_id]);
       await client.query(`UPDATE training_sessions SET performed_on = $3, notes = $4, movements = $5
         WHERE user_id = $1 AND submission_id = $2`, [userId, saved.submission_id, date, notes, JSON.stringify(recorded)]);
     } else {
@@ -211,7 +214,7 @@ export async function listSessions(userId: number) {
   const { rows } = await pool.query<{ id: string; name: string; date: string; notes: string; movements: RecordedMovement[]; planned_on: string | null }>(
     `SELECT s.id, s.workout_name AS name, to_char(s.performed_on, 'YYYY-MM-DD') AS date, s.notes, s.movements,
        to_char(l.planned_on, 'YYYY-MM-DD') AS planned_on
-     FROM training_sessions s LEFT JOIN training_session_days l USING (user_id, submission_id)
+     FROM training_sessions s LEFT JOIN training_resolved_session_days l USING (user_id, submission_id)
      WHERE s.user_id = $1 ORDER BY s.performed_on DESC, s.id DESC`, [userId]);
   return rows;
 }

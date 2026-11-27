@@ -53,15 +53,25 @@ CREATE TABLE IF NOT EXISTS training_session_days (
   FOREIGN KEY (user_id, submission_id) REFERENCES training_sessions (user_id, submission_id) ON DELETE CASCADE
 );
 
--- Older logs only recorded the performed date and the planned weekday in the workout name.
--- Link the latest same-day match, preserving all historical sessions.
+-- A same-day legacy log can become editable after a week is locked, between releases.
+-- Explicit links take precedence, including when the performed date has since changed.
+CREATE OR REPLACE VIEW training_resolved_session_days AS
+SELECT user_id, planned_on, submission_id FROM training_session_days
+UNION ALL
+(
+  SELECT DISTINCT ON (s.user_id, s.performed_on) s.user_id, s.performed_on AS planned_on, s.submission_id
+  FROM training_sessions s
+  JOIN training_plan_days d ON d.user_id = s.user_id AND d.planned_on = s.performed_on AND d.locked
+  WHERE split_part(s.workout_name, ' ', 1) = (ARRAY['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'])[extract(isodow FROM d.planned_on)::int]
+    AND NOT EXISTS (SELECT 1 FROM training_session_days l WHERE l.user_id = s.user_id AND l.planned_on = d.planned_on)
+    AND NOT EXISTS (SELECT 1 FROM training_session_days l WHERE l.user_id = s.user_id AND l.submission_id = s.submission_id)
+  ORDER BY s.user_id, s.performed_on, s.id DESC
+);
+
+-- Persist any matches already available at migration time.
 INSERT INTO training_session_days (user_id, planned_on, submission_id)
-SELECT DISTINCT ON (s.user_id, s.performed_on) s.user_id, s.performed_on, s.submission_id
-FROM training_sessions s
-JOIN training_plan_days d ON d.user_id = s.user_id AND d.planned_on = s.performed_on AND d.locked
-WHERE split_part(s.workout_name, ' ', 1) = (ARRAY['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'])[extract(isodow FROM d.planned_on)::int]
-  AND NOT EXISTS (SELECT 1 FROM training_session_days l WHERE l.user_id = s.user_id AND l.submission_id = s.submission_id)
-ORDER BY s.user_id, s.performed_on, s.id DESC
+SELECT r.user_id, r.planned_on, r.submission_id FROM training_resolved_session_days r
+WHERE NOT EXISTS (SELECT 1 FROM training_session_days l WHERE l.user_id = r.user_id AND l.planned_on = r.planned_on)
 ON CONFLICT DO NOTHING;
 
 -- An explicitly assigned Rest survives regeneration. Automatically spaced rest days stay flexible.

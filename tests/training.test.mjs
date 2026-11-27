@@ -310,6 +310,26 @@ test("training routes share accounts, isolate private libraries and save perform
     const restOnlyLog = await (await get("/workouts/log/" + shift(6 - weekdayOffset), b)).text();
     assert.match(restOnlyLog, /Rest day/);
     assert.doesNotMatch(restOnlyLog, /name="quantity-/);
+    // Tuesday was logged before its plan was locked, after the release backfill ran.
+    const tuesday = shift(1 - weekdayOffset);
+    const tuesdayPath = "/workouts/log/" + tuesday;
+    await pool.query("UPDATE training_plan_days SET locked = false WHERE user_id = $1 AND planned_on = $2", [creator.id, tuesday]);
+    for (const notes of ["Earlier Tuesday", "Saved Tuesday"]) {
+      await pool.query(`INSERT INTO training_sessions (user_id, submission_id, workout_name, performed_on, notes, movements)
+        VALUES ($1,$2,'Tuesday strength',$3,$4,$5)`, [creator.id, randomUUID(), tuesday, notes, JSON.stringify(sessions[0].movements)]);
+    }
+    await pool.query(migration);
+    assert.equal((await plan({ intent: "lock" })).status, 302);
+    assert.match(await (await get("/workouts/log", a)).text(), /Update log for Tuesday/);
+    assert.doesNotMatch(await (await get("/workouts/log", b)).text(), /Update log for Tuesday/);
+    const tuesdayPage = await (await get(tuesdayPath, a)).text();
+    assert.match(tuesdayPage, /Saved Tuesday<\/textarea>/);
+    assert.match(tuesdayPage, />Update log</);
+    assert.equal((await post(tuesdayPath, { ...update, date: shift(9), notes: "Corrected Tuesday" }, a)).status, 302);
+    assert.match(await (await get(tuesdayPath, a)).text(), /Corrected Tuesday<\/textarea>/);
+    assert.match(await (await get("/workouts/log", a)).text(), /Update log for Tuesday/);
+    assert.equal((await pool.query("SELECT id FROM training_sessions WHERE user_id = $1 AND workout_name = 'Tuesday strength'", [creator.id])).rowCount, 2);
+
     // Adopt the latest same-day legacy entry on upgrade without removing earlier history.
     for (const notes of ["Older Friday entry", "Latest Friday entry"]) {
       await pool.query(`INSERT INTO training_sessions (user_id, submission_id, workout_name, performed_on, notes, movements)

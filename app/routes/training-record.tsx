@@ -81,7 +81,7 @@ function SessionForm({ loaderData: { day, name, exercises, rows, saved, previous
               <input aria-label={m.name + " set " + (index + 1) + " " + unit} name={(cardio ? "time-" : "quantity-") + field} type="number"
                 min={cardio ? 0 : 1} max={cardio ? undefined : 3600} step={cardio ? "any" : 1} defaultValue={last?.unit === unit ? prior?.quantity : undefined}/>
               <input aria-label={m.name + " set " + (index + 1) + (cardio ? " watts" : " weight in pounds")} name={(cardio ? "watts-" : "weight-") + field} type="number"
-                min={0} max={cardio ? undefined : 5000} step="any" placeholder="Optional" defaultValue={load ?? undefined}/>
+                min={0} max={cardio ? undefined : 5000} step="any" defaultValue={load ?? undefined}/>
             </div>;
           })}
           {sets < maxLoggedSets &&
